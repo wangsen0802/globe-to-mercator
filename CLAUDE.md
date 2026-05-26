@@ -7,7 +7,7 @@ Three.js + GLSL shader 项目：将 3D 地球（球体）通过顶点着色器�
 - **Runtime**: Three.js `^0.170.0`（ES Module）
 - **构建工具**: Vite `^6.0.0`
 - **包管理**: pnpm
-- **着色器**: 自定义 GLSL vert/frag，通过 `?raw` 导入
+- **着色器**: 自定义 GLSL vert/frag，通过 `?raw` 导入，`#include` 引入共享代码
 
 ## 项目结构
 
@@ -22,11 +22,14 @@ src/
 │   ├── projectionPanel.js  # 投影教育信息面板
 │   └── indicatorPanel.js   # 指标开关面板
 └── shaders/
+    ├── common/
+    │   └── projections.glsl  # 共享投影函数（PI、缓动、4种投影），#include 引入
     ├── globe.vert       # 地球顶点着色器：球面→投影变形 + 剥橘子缓动
     ├── globe.frag       # 地球片段着色器：纹理采样、光照、经纬线
     ├── indicator.vert   # 指标顶点着色器（朝索+面积轮廓共用）
     ├── tissot.frag      # 朝索圆变形着色
     └── outline.frag     # 轮廓线/填充着色
+vite-plugin-glsl-include.js  # Vite 插件：处理 GLSL #include 指令
 ```
 
 ## 关键实现
@@ -55,6 +58,7 @@ pnpm build    # 生产构建
 
 - 注释使用中文
 - HTML lang 设为 `zh-CN`
-- 着色器中定义 `#define PI 3.14159265359`
+- 着色器中 `#define PI` 在 `projections.glsl` 中统一定义，各着色器通过 `#include` 引入
 - uniform 命名：`u` 前缀（uProgress, uSpreadDelay, uTexture, uLightDir）
 - varying 命名：`v` 前缀（vUv, vNormal, vWorldPos, vLocalProgress）
+- GLSL 共享代码放 `src/shaders/common/`，用 `#include common/文件名.glsl` 引入
