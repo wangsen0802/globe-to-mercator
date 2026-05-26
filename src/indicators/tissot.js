@@ -15,10 +15,49 @@ const LON_STEP = 30;          // 经度间隔（度）
 const DEG2RAD = Math.PI / 180;
 
 /**
- * 在球面上创建一个小圆的几何体
+ * 测地线圆：在球面上计算精确正圆的点
+ * 使用指数映射公式 P = cos(r)·C + sin(r)·D
+ * 其中 C 是圆心，D 是切平面内的方向向量
  * @param {number} latCenter - 圆心纬度（弧度）
  * @param {number} lonCenter - 圆心经度（弧度）
- * @returns {THREE.BufferGeometry}
+ * @param {number} theta - 圆上角度（0=北，π/2=东）
+ * @param {number} radius - 角半径（弧度）
+ * @returns {{ x: number, y: number, z: number, lat: number, lon: number }}
+ */
+function geodesicCirclePoint(latCenter, lonCenter, theta, radius) {
+  const clat = Math.cos(latCenter), slat = Math.sin(latCenter);
+  const clon = Math.cos(lonCenter), slon = Math.sin(lonCenter);
+
+  // 北向单位切线（纬度增大方向）
+  const nx = -slat * slon;
+  const ny = clat;
+  const nz = -slat * clon;
+
+  // 东向单位切线（经度增大方向）
+  const ex = clon;
+  const ez = -slon;
+
+  // 切平面内的方向向量
+  const cosT = Math.cos(theta), sinT = Math.sin(theta);
+  const dx = cosT * nx + sinT * ex;
+  const dy = cosT * ny;
+  const dz = cosT * nz + sinT * ez;
+
+  // P = cos(r)·C + sin(r)·D，结果自动在单位球面上
+  const cosR = Math.cos(radius), sinR = Math.sin(radius);
+  const x = cosR * clat * slon + sinR * dx;
+  const y = cosR * slat + sinR * dy;
+  const z = cosR * clat * clon + sinR * dz;
+
+  return {
+    x, y, z,
+    lat: Math.asin(Math.max(-1, Math.min(1, y))),
+    lon: Math.atan2(x, z)
+  };
+}
+
+/**
+ * 在球面上创建一个测地线正圆的几何体
  */
 function createCircleGeometry(latCenter, lonCenter) {
   const positions = [];
@@ -38,27 +77,10 @@ function createCircleGeometry(latCenter, lonCenter) {
   // 圆周顶点（索引 1 ~ segments+1）
   for (let i = 0; i <= CIRCLE_SEGMENTS; i++) {
     const theta = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
-
-    // 球面上小圆的纬度偏移
-    const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
-    // 经度偏移需要除以 cos(lat) 来保持地理坐标中的圆形
-    const lon = lonCenter + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
-
-    // 限制纬度不超出极点
-    const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
-    // 将经度归一化到 [-π, π]
-    let clampedLon = lon;
-    while (clampedLon > Math.PI) clampedLon -= Math.PI * 2;
-    while (clampedLon < -Math.PI) clampedLon += Math.PI * 2;
-
-    // 球面笛卡尔坐标
-    positions.push(
-      Math.cos(clampedLat) * Math.sin(clampedLon),
-      Math.sin(clampedLat),
-      Math.cos(clampedLat) * Math.cos(clampedLon)
-    );
-    latitudes.push(clampedLat);
-    longitudes.push(clampedLon);
+    const pt = geodesicCirclePoint(latCenter, lonCenter, theta, CIRCLE_RADIUS);
+    positions.push(pt.x, pt.y, pt.z);
+    latitudes.push(pt.lat);
+    longitudes.push(pt.lon);
   }
 
   // 三角形扇形索引（中心 → 相邻两个圆周顶点）
@@ -85,20 +107,10 @@ function createOutlineGeometry(latCenter, lonCenter) {
 
   for (let i = 0; i <= CIRCLE_SEGMENTS; i++) {
     const theta = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
-    const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
-    const lon = lonCenter + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
-    const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
-    let clampedLon = lon;
-    while (clampedLon > Math.PI) clampedLon -= Math.PI * 2;
-    while (clampedLon < -Math.PI) clampedLon += Math.PI * 2;
-
-    positions.push(
-      Math.cos(clampedLat) * Math.sin(clampedLon),
-      Math.sin(clampedLat),
-      Math.cos(clampedLat) * Math.cos(clampedLon)
-    );
-    latitudes.push(clampedLat);
-    longitudes.push(clampedLon);
+    const pt = geodesicCirclePoint(latCenter, lonCenter, theta, CIRCLE_RADIUS);
+    positions.push(pt.x, pt.y, pt.z);
+    latitudes.push(pt.lat);
+    longitudes.push(pt.lon);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -111,7 +123,7 @@ function createOutlineGeometry(latCenter, lonCenter) {
 
 /**
  * 在 180° 经线上创建拆分的两个半圆几何体（填充用）
- * 180° 经线上的圆会跨越日期变更线，需要拆成左右两个半圆
+ * 测地线圆在 180° 处跨越日期变更线，按 θ 范围拆为左右两半
  * @param {number} latCenter - 圆心纬度（弧度）
  * @returns {THREE.BufferGeometry[]} [左半圆, 右半圆]
  */
@@ -125,8 +137,8 @@ function createSplitCircleGeometries(latCenter) {
     const lons = [];
     const indices = [];
 
-    // θ ∈ [0, π] → sin(θ) ≥ 0 → lon 偏正 → 归到 -π 侧
-    // θ ∈ [π, 2π] → sin(θ) ≤ 0 → lon 偏负 → 归到 +π 侧
+    // θ ∈ [0, π] → 东向分量正 → lon 落在 -π 侧
+    // θ ∈ [π, 2π] → 东向分量负 → lon 落在 +π 侧
     const tStart = side === -1 ? 0 : Math.PI;
     const tEnd = side === -1 ? Math.PI : Math.PI * 2;
     const centerLon = side * Math.PI;
@@ -143,21 +155,11 @@ function createSplitCircleGeometries(latCenter) {
     // 半圆弧顶点
     for (let i = 0; i <= halfSeg; i++) {
       const theta = tStart + (i / halfSeg) * (tEnd - tStart);
-      const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
-      const lonRaw = Math.PI + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
-
-      const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
-
-      // 强制经度到对应侧：-π 侧减 2π，+π 侧保持原值
-      const lon = side === -1 ? lonRaw - Math.PI * 2 : lonRaw;
-
-      positions.push(
-        Math.cos(clampedLat) * Math.sin(lon),
-        Math.sin(clampedLat),
-        Math.cos(clampedLat) * Math.cos(lon)
-      );
-      lats.push(clampedLat);
-      lons.push(lon);
+      const pt = geodesicCirclePoint(latCenter, Math.PI, theta, CIRCLE_RADIUS);
+      positions.push(pt.x, pt.y, pt.z);
+      lats.push(pt.lat);
+      // 北/南端点（θ=0,π）的 lon 恰好为 π，需强制到对应侧
+      lons.push(side === -1 ? (pt.lon > 0 ? -Math.PI : pt.lon) : (pt.lon < 0 ? Math.PI : pt.lon));
     }
 
     // 扇形三角形索引
@@ -196,19 +198,10 @@ function createSplitOutlineGeometries(latCenter) {
 
     for (let i = 0; i <= halfSeg; i++) {
       const theta = tStart + (i / halfSeg) * (tEnd - tStart);
-      const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
-      const lonRaw = Math.PI + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
-
-      const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
-      const lon = side === -1 ? lonRaw - Math.PI * 2 : lonRaw;
-
-      positions.push(
-        Math.cos(clampedLat) * Math.sin(lon),
-        Math.sin(clampedLat),
-        Math.cos(clampedLat) * Math.cos(lon)
-      );
-      lats.push(clampedLat);
-      lons.push(lon);
+      const pt = geodesicCirclePoint(latCenter, Math.PI, theta, CIRCLE_RADIUS);
+      positions.push(pt.x, pt.y, pt.z);
+      lats.push(pt.lat);
+      lons.push(side === -1 ? (pt.lon > 0 ? -Math.PI : pt.lon) : (pt.lon < 0 ? Math.PI : pt.lon));
     }
 
     const geo = new THREE.BufferGeometry();
