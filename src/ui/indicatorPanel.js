@@ -48,13 +48,8 @@ export function initIndicatorPanel(opts) {
   areaDetail.appendChild(areaInner);
   distSection.appendChild(areaDetail);
 
-  panelEl.appendChild(distSection);
-
-  // ===== 航线指标 =====
-  const routeSection = el('div', 'ind-section');
-  routeSection.appendChild(el('div', 'ind-section-label', '航线指标'));
-
-  routeSection.appendChild(createToggle('toggle-route', '大圆航线', false, (v) => opts.onRouteToggle(v)));
+  // 大圆航线
+  distSection.appendChild(createToggle('toggle-route', '大圆航线', false, (v) => opts.onRouteToggle(v)));
 
   // 航线图例（展开/折叠）
   const routeDetail = createExpandable('route-detail');
@@ -63,9 +58,9 @@ export function initIndicatorPanel(opts) {
   routeInner.appendChild(createLineRow('#4fc3f7', '大圆（最短路径）'));
   routeInner.appendChild(createLineRow('#ff9800', '恒向线（等角航线）'));
   routeDetail.appendChild(routeInner);
-  routeSection.appendChild(routeDetail);
+  distSection.appendChild(routeDetail);
 
-  panelEl.appendChild(routeSection);
+  panelEl.appendChild(distSection);
 }
 
 // 创建 toggle 开关行
