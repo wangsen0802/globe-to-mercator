@@ -2,7 +2,7 @@
  * 指标开关面板 — 在教育面板底部添加变形指标的 toggle 开关
  */
 
-const panelEl = document.getElementById('info-panel');
+const panelEl = document.getElementById('indicator-panel');
 
 // 指标开关回调（保留供外部扩展）
 let callbacks = {}; // eslint-disable-line no-unused-vars

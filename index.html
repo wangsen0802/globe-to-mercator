@@ -126,6 +126,20 @@
     #info-panel::-webkit-scrollbar { width: 4px; }
     #info-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 
+    #indicator-panel {
+      position: absolute;
+      top: 72px;
+      left: 20px;
+      width: 240px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      color: #fff;
+      z-index: 10;
+    }
+
     .panel-title {
       font-size: 16px;
       font-weight: 600;
@@ -279,6 +293,7 @@
   <div id="canvas-container">
     <div class="proj-btn-group"></div>
     <div id="info-panel"></div>
+    <div id="indicator-panel"></div>
     <div id="controls">
       <label>球体</label>
       <input type="range" id="progress-slider" min="0" max="100" value="0" />
