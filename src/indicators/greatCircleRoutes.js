@@ -71,14 +71,21 @@ function generateRhumbLinePoints(from, to) {
   if (dLon > PI) dLon -= 2 * PI;
   if (dLon < -PI) dLon += 2 * PI;
 
+  // 将经度归一化到 [-π, π]，确保 splitAtDateLine 能检测到跳变
+  function normalizeLon(lon) {
+    return ((lon % (2 * PI)) + 3 * PI) % (2 * PI) - PI;
+  }
+
   const points = [];
   for (let i = 0; i <= GC_SEGMENTS; i++) {
     const t = i / GC_SEGMENTS;
     const psi = psi1 + t * dPsi;
     const lat = 2 * Math.atan(Math.exp(psi)) - PI / 2;
-    const lon = Math.abs(dPsi) < 1e-6
-      ? lon1 + t * dLon
-      : lon1 + dLon * (psi - psi1) / dPsi;
+    const lon = normalizeLon(
+      Math.abs(dPsi) < 1e-6
+        ? lon1 + t * dLon
+        : lon1 + dLon * (psi - psi1) / dPsi
+    );
     points.push({ lat, lon });
   }
   return points;
