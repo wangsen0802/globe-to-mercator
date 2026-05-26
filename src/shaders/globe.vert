@@ -29,7 +29,7 @@ float easeInOutCubic(float t) {
 vec3 projectMercator(float lon, float lat) {
   float mercX = lon;
   float mercY = log(tan(PI / 4.0 + lat / 2.0));
-  mercY = clamp(mercY, -2.5, 2.5);
+  mercY = clamp(mercY, -PI, PI);
   return vec3(mercX, mercY, 0.0);
 }
 
