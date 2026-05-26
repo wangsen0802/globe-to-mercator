@@ -74,10 +74,50 @@
       min-width: 40px;
       text-align: right;
     }
+
+    /* 投影切换按钮 */
+    .proj-btn-group {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .proj-btn {
+      background: transparent;
+      color: rgba(255, 255, 255, 0.5);
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-family: 'SF Mono', system-ui, sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .proj-btn:hover {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .proj-btn.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
   <div id="canvas-container">
+    <div class="proj-btn-group">
+      <button class="proj-btn active" data-type="0">EPSG:3857</button>
+      <button class="proj-btn" data-type="1">EPSG:4326</button>
+    </div>
     <div id="controls">
       <label>球体</label>
       <input type="range" id="progress-slider" min="0" max="100" value="0" />

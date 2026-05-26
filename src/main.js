@@ -6,6 +6,7 @@ import fragmentShader from './shaders/globe.frag?raw';
 
 // ===== 全局状态 =====
 let progress = 0;
+let projectionType = 0; // 0 = Mercator(3857), 1 = Plate Carree(4326/4490)
 const LON_SEGMENTS = 360;
 const LAT_SEGMENTS = 180;
 const SPREAD_DELAY = 0.35; // 剥橘子展开延迟系数
@@ -59,7 +60,8 @@ function createGlobe(texture) {
       uProgress: { value: 0.0 },
       uSpreadDelay: { value: SPREAD_DELAY },
       uTexture: { value: texture },
-      uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() }
+      uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
+      uProjectionType: { value: 0.0 }
     },
     side: THREE.DoubleSide
   });
@@ -142,6 +144,16 @@ slider.addEventListener('input', (e) => {
   progressLabel.textContent = e.target.value + '%';
 });
 
+// ===== 投影切换 =====
+const projButtons = document.querySelectorAll('.proj-btn');
+projButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    projectionType = parseInt(btn.dataset.type);
+    projButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
 // ===== 动画循环 =====
 function animate() {
   requestAnimationFrame(animate);
@@ -151,6 +163,7 @@ function animate() {
   // 更新 shader uniforms
   if (globe) {
     globe.material.uniforms.uProgress.value = progress;
+    globe.material.uniforms.uProjectionType.value = projectionType;
   }
 
   // 球体阶段自动慢旋转

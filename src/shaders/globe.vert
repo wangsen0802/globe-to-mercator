@@ -1,5 +1,6 @@
 uniform float uProgress;
 uniform float uSpreadDelay;
+uniform float uProjectionType; // 0 = Mercator(3857), 1 = Plate Carree(4326/4490)
 
 varying vec3 vNormal;
 varying vec3 vWorldPos;
@@ -29,12 +30,17 @@ void main() {
   vLatitude = latitude;
   vLongitude = longitude;
 
-  // ===== 墨卡托平面坐标 =====
+  // ===== 墨卡托平面坐标 (EPSG:3857) =====
   float mercX = longitude;
   float mercY = log(tan(PI / 4.0 + latitude / 2.0));
   mercY = clamp(mercY, -2.5, 2.5);
-
   vec3 mercatorPos = vec3(mercX, mercY, 0.0);
+
+  // ===== 等距柱状投影平面坐标 (EPSG:4326/4490) =====
+  vec3 plateCarreePos = vec3(longitude, latitude, 0.0);
+
+  // 根据投影类型选择目标平面坐标
+  vec3 flatPos = mix(mercatorPos, plateCarreePos, uProjectionType);
 
   // ===== "剥橘子" 逐层展开 =====
   float normalizedLat = abs(latitude) / (PI / 2.0);
@@ -45,7 +51,7 @@ void main() {
   vLocalProgress = localProgress;
 
   // 在球面和平面之间插值位置
-  vec3 finalPos = mix(spherePos, mercatorPos, localProgress);
+  vec3 finalPos = mix(spherePos, flatPos, localProgress);
 
   // 法线插值
   vec3 flatNormal = vec3(0.0, 0.0, 1.0);
