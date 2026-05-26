@@ -51,7 +51,10 @@ function buildUniforms() {
     uProgress: { value: 0.0 },
     uSpreadDelay: { value: SPREAD_DELAY },
     uTexture: { value: null },
-    uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
+    uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },     // 主光源：右上方
+    uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() }, // 补光2：左下方偏前
+    uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },        // 补光3：正前方
+    uLightDir4: { value: new THREE.Vector3(0.7, -0.5, 0.5).normalize() }, // 补光4：右下方偏前
     uProjectionID: { value: 0.0 },
     uConicStdLat: { value: 0.5236 },
     uAzimuthalType: { value: 0.0 }

@@ -1,6 +1,9 @@
 uniform sampler2D uTexture;
 uniform float uProgress;
 uniform vec3 uLightDir;
+uniform vec3 uLightDir2;
+uniform vec3 uLightDir3;
+uniform vec3 uLightDir4;
 
 varying vec3 vNormal;
 varying vec3 vWorldPos;
@@ -18,11 +21,28 @@ void main() {
 
   vec4 texColor = texture2D(uTexture, vec2(u, v));
 
-  // ===== 光照 =====
-  vec3 lightDir = normalize(uLightDir);
-  float diff = max(dot(vNormal, lightDir), 0.0);
-  vec3 ambient = texColor.rgb * 0.35;
-  vec3 diffuse = texColor.rgb * diff * 0.65;
+  // ===== 多光源光照 =====
+  // 主光源：右上方（最强）
+  vec3 lightDir1 = normalize(uLightDir);
+  float diff1 = max(dot(vNormal, lightDir1), 0.0);
+  // 补光2：左下方（中等强度，填充暗部）
+  vec3 lightDir2 = normalize(uLightDir2);
+  float diff2 = max(dot(vNormal, lightDir2), 0.0);
+  // 补光3：正前方（弱，整体提亮）
+  vec3 lightDir3 = normalize(uLightDir3);
+  float diff3 = max(dot(vNormal, lightDir3), 0.0);
+  // 补光4：右下方（微弱，增加立体感）
+  vec3 lightDir4 = normalize(uLightDir4);
+  float diff4 = max(dot(vNormal, lightDir4), 0.0);
+
+  // 提高环境光基底 + 多光源漫反射叠加
+  vec3 ambient = texColor.rgb * 0.45;
+  vec3 diffuse = texColor.rgb * (
+    diff1 * 0.45 +   // 主光源
+    diff2 * 0.30 +   // 补光2
+    diff3 * 0.20 +   // 补光3
+    diff4 * 0.15     // 补光4
+  );
   vec3 color = ambient + diffuse;
 
   // ===== 网格线（经纬线） =====
