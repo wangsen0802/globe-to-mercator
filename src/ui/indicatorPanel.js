@@ -1,10 +1,10 @@
 /**
- * 指标开关面板 — 在教育面板底部添加变形指标的 toggle 开关
+ * 指标开关面板 — 左侧独立面板，始终可见
  */
 
 const panelEl = document.getElementById('indicator-panel');
 
-// 指标开关回调（保留供外部扩展）
+// 指标开关回调
 let callbacks = {}; // eslint-disable-line no-unused-vars
 
 function el(tag, className, text) {
@@ -24,127 +24,102 @@ function el(tag, className, text) {
 export function initIndicatorPanel(opts) {
   callbacks = opts;
 
-  const section = el('div', 'panel-section');
-  section.style.marginTop = '8px';
-  section.style.paddingTop = '12px';
-  section.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+  // 面板标题
+  const header = el('div', 'ind-header');
+  header.appendChild(el('div', 'ind-header-title', '指标'));
+  panelEl.appendChild(header);
 
-  section.appendChild(el('div', 'panel-section-title', '变形指标'));
+  // ===== 变形指标 =====
+  const distSection = el('div', 'ind-section');
+  distSection.appendChild(el('div', 'ind-section-label', '变形指标'));
 
-  // 朝索椭圆开关
-  const tissotRow = createToggleRow('toggle-tissot', '朝索变形椭圆', true, (checked) => {
-    opts.onTissotToggle(checked);
-  });
-  section.appendChild(tissotRow);
+  distSection.appendChild(createToggle('toggle-tissot', '朝索变形椭圆', true, (v) => opts.onTissotToggle(v)));
+  distSection.appendChild(createToggle('toggle-area', '面积比较', false, (v) => opts.onAreaToggle(v)));
 
-  // 面积比较开关
-  const areaRow = createToggleRow('toggle-area', '面积比较', false, (checked) => {
-    opts.onAreaToggle(checked);
-  });
-  section.appendChild(areaRow);
+  // 面积详情（展开/折叠）
+  const areaDetail = createExpandable('area-detail');
+  const areaInner = el('div', 'ind-detail-inner');
+  areaInner.appendChild(el('div', 'ind-detail-title', '真实面积对比'));
+  areaInner.appendChild(createDotRow('#4fc3f7', '格陵兰', '216 万km²'));
+  areaInner.appendChild(createDotRow('#81c784', '非洲', '3,037 万km²'));
+  areaInner.appendChild(createDotRow('#ffb74d', '南美洲', '1,784 万km²'));
+  const note = el('div', 'ind-note', '非洲 ≈ 14× 格陵兰，但墨卡托投影中看起来差不多大');
+  areaInner.appendChild(note);
+  areaDetail.appendChild(areaInner);
+  distSection.appendChild(areaDetail);
 
-  // 面积信息区域（初始隐藏）
-  const areaInfo = el('div', 'area-info');
-  areaInfo.id = 'area-info';
-  areaInfo.style.display = 'none';
+  panelEl.appendChild(distSection);
 
-  const infoTitle = el('div', '');
-  infoTitle.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px;margin-bottom:4px;';
-  infoTitle.textContent = '真实面积对比';
-  areaInfo.appendChild(infoTitle);
+  // ===== 航线指标 =====
+  const routeSection = el('div', 'ind-section');
+  routeSection.appendChild(el('div', 'ind-section-label', '航线指标'));
 
-  areaInfo.appendChild(createAreaRow('#4fc3f7', '格陵兰', '216 万km²'));
-  areaInfo.appendChild(createAreaRow('#81c784', '非洲', '3,037 万km²'));
-  areaInfo.appendChild(createAreaRow('#ffb74d', '南美洲', '1,784 万km²'));
+  routeSection.appendChild(createToggle('toggle-route', '大圆航线', false, (v) => opts.onRouteToggle(v)));
 
-  const note = el('div', 'area-note');
-  note.textContent = '非洲 ≈ 14× 格陵兰，但在墨卡托投影中看起来差不多大';
-  areaInfo.appendChild(note);
+  // 航线图例（展开/折叠）
+  const routeDetail = createExpandable('route-detail');
+  const routeInner = el('div', 'ind-detail-inner');
+  routeInner.appendChild(el('div', 'ind-detail-title', '航线类型'));
+  routeInner.appendChild(createLineRow('#4fc3f7', '大圆（最短路径）'));
+  routeInner.appendChild(createLineRow('#ff9800', '恒向线（等角航线）'));
+  routeDetail.appendChild(routeInner);
+  routeSection.appendChild(routeDetail);
 
-  section.appendChild(areaInfo);
-  panelEl.appendChild(section);
-
-  // ===== 航线指标（独立 section） =====
-  const routeSection = el('div', 'panel-section');
-  routeSection.style.marginTop = '8px';
-  routeSection.style.paddingTop = '12px';
-  routeSection.style.borderTop = '1px solid rgba(255,255,255,0.1)';
-
-  routeSection.appendChild(el('div', 'panel-section-title', '航线指标'));
-
-  // 大圆航线开关
-  const routeRow = createToggleRow('toggle-route', '大圆航线', false, (checked) => {
-    opts.onRouteToggle(checked);
-  });
-  routeSection.appendChild(routeRow);
-
-  // 航线图例
-  const routeLegend = el('div', 'area-info');
-  routeLegend.id = 'route-legend';
-  routeLegend.style.display = 'none';
-
-  const legendTitle = el('div', '');
-  legendTitle.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px;margin-bottom:4px;';
-  legendTitle.textContent = '航线类型';
-  routeLegend.appendChild(legendTitle);
-
-  routeLegend.appendChild(createLegendRow('#4fc3f7', '大圆（最短路径）'));
-  routeLegend.appendChild(createLegendRow('#ff9800', '恒向线（等角航线）'));
-
-  routeSection.appendChild(routeLegend);
   panelEl.appendChild(routeSection);
 }
 
-function createAreaRow(color, name, area) {
-  const row = el('div', 'area-row');
-  const dot = el('span', 'area-dot');
-  dot.style.background = color;
-  row.appendChild(dot);
-  row.appendChild(el('span', '', name + ' '));
-  const val = el('span', 'area-value', area);
-  row.appendChild(val);
-  return row;
-}
+// 创建 toggle 开关行
+function createToggle(id, label, checked, onChange) {
+  const row = el('label', 'ind-toggle');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.id = id;
+  cb.checked = checked;
 
-function createLegendRow(color, label) {
-  const row = el('div', 'area-row');
-  const line = el('span', 'area-dot');
-  line.style.background = color;
-  line.style.width = '20px';
-  line.style.height = '3px';
-  line.style.borderRadius = '1px';
-  row.appendChild(line);
-  row.appendChild(el('span', '', ' ' + label));
-  return row;
-}
+  row.appendChild(cb);
+  row.appendChild(el('span', 'ind-switch'));
+  row.appendChild(el('span', 'ind-toggle-label', label));
 
-function createToggleRow(id, label, defaultChecked, onChange) {
-  const row = el('label', 'indicator-toggle');
-
-  const checkbox = el('input');
-  checkbox.type = 'checkbox';
-  checkbox.id = id;
-  checkbox.checked = defaultChecked;
-
-  const slider = el('span', 'toggle-slider');
-  const labelSpan = el('span', 'toggle-label', label);
-
-  row.appendChild(checkbox);
-  row.appendChild(slider);
-  row.appendChild(labelSpan);
-
-  checkbox.addEventListener('change', () => {
-    onChange(checkbox.checked);
-    // 显示/隐藏面积信息
-    if (id === 'toggle-area') {
-      const areaInfo = document.getElementById('area-info');
-      if (areaInfo) areaInfo.style.display = checkbox.checked ? 'block' : 'none';
-    }
-    if (id === 'toggle-route') {
-      const routeLegend = document.getElementById('route-legend');
-      if (routeLegend) routeLegend.style.display = checkbox.checked ? 'block' : 'none';
-    }
+  cb.addEventListener('change', () => {
+    onChange(cb.checked);
+    // 联动展开详情区域
+    if (id === 'toggle-area') toggleDetail('area-detail', cb.checked);
+    if (id === 'toggle-route') toggleDetail('route-detail', cb.checked);
   });
 
+  return row;
+}
+
+// 创建可展开区域
+function createExpandable(id) {
+  const wrap = el('div', 'ind-detail');
+  wrap.id = id;
+  return wrap;
+}
+
+// 切换展开状态
+function toggleDetail(id, open) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open', open);
+}
+
+// 圆点 + 名称 + 数值行
+function createDotRow(color, name, value) {
+  const row = el('div', 'ind-row');
+  const dot = el('span', 'ind-dot');
+  dot.style.background = color;
+  row.appendChild(dot);
+  row.appendChild(el('span', '', name));
+  row.appendChild(el('span', 'ind-value', value));
+  return row;
+}
+
+// 线段 + 名称行（用于航线图例）
+function createLineRow(color, label) {
+  const row = el('div', 'ind-row');
+  const line = el('span', 'ind-line');
+  line.style.background = color;
+  row.appendChild(line);
+  row.appendChild(el('span', '', label));
   return row;
 }

@@ -130,14 +130,172 @@
       position: absolute;
       top: 72px;
       left: 20px;
-      width: 240px;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(12px);
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 16px;
+      width: 256px;
+      background: rgba(10, 12, 28, 0.75);
+      backdrop-filter: blur(20px) saturate(1.4);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0;
       color: #fff;
       z-index: 10;
+      overflow: hidden;
+    }
+
+    .ind-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .ind-header-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .ind-section {
+      padding: 12px 18px;
+    }
+
+    .ind-section + .ind-section {
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .ind-section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-bottom: 10px;
+    }
+
+    .ind-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 5px 0;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .ind-toggle:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .ind-toggle input { display: none; }
+
+    .ind-switch {
+      width: 32px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9px;
+      position: relative;
+      transition: background 0.3s ease;
+      flex-shrink: 0;
+    }
+
+    .ind-switch::after {
+      content: '';
+      width: 14px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .ind-toggle input:checked + .ind-switch {
+      background: rgba(74, 222, 128, 0.7);
+    }
+
+    .ind-toggle input:checked + .ind-switch::after {
+      transform: translateX(14px);
+      background: #fff;
+      box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+    }
+
+    .ind-toggle-label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      user-select: none;
+      transition: color 0.2s;
+    }
+
+    .ind-toggle input:checked ~ .ind-toggle-label {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    /* 展开的详情区域 */
+    .ind-detail {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease, opacity 0.25s ease, margin 0.25s ease;
+      opacity: 0;
+      margin-top: 0;
+    }
+
+    .ind-detail.open {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 10px;
+    }
+
+    .ind-detail-inner {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .ind-detail-title {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.35);
+      margin-bottom: 8px;
+      letter-spacing: 0.3px;
+    }
+
+    .ind-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 5px;
+    }
+
+    .ind-row:last-child { margin-bottom: 0; }
+
+    .ind-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .ind-line {
+      width: 18px;
+      height: 2px;
+      border-radius: 1px;
+      flex-shrink: 0;
+    }
+
+    .ind-value {
+      font-family: 'SF Mono', monospace;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-left: auto;
+    }
+
+    .ind-note {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.35);
+      line-height: 1.5;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .panel-title {
@@ -204,88 +362,6 @@
       font-size: 11px;
       color: rgba(255, 255, 255, 0.4);
       margin-bottom: 4px;
-    }
-
-    /* ===== 指标开关样式 ===== */
-    .indicator-toggle {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      padding: 6px 0;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.8);
-    }
-
-    .indicator-toggle input[type="checkbox"] {
-      display: none;
-    }
-
-    .toggle-slider {
-      width: 36px;
-      height: 20px;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 10px;
-      position: relative;
-      transition: background 0.25s ease;
-      flex-shrink: 0;
-    }
-
-    .toggle-slider::after {
-      content: '';
-      width: 16px;
-      height: 16px;
-      background: #fff;
-      border-radius: 50%;
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      transition: transform 0.25s ease;
-    }
-
-    .indicator-toggle input:checked + .toggle-slider {
-      background: #4ade80;
-    }
-
-    .indicator-toggle input:checked + .toggle-slider::after {
-      transform: translateX(16px);
-    }
-
-    .toggle-label {
-      user-select: none;
-    }
-
-    /* 面积信息 */
-    .area-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      margin-bottom: 4px;
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .area-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .area-value {
-      font-family: 'SF Mono', monospace;
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-left: auto;
-    }
-
-    .area-note {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.45);
-      line-height: 1.5;
-      margin-top: 6px;
-      padding-top: 6px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
   </style>
 </head>
