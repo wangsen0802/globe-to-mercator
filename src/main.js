@@ -65,6 +65,8 @@ function createGlobe(texture) {
   const uniforms = buildUniforms();
   uniforms.uTexture.value = texture;
 
+  // 同步当前选中的投影（防止纹理加载前用户已切换投影）
+  uniforms.uProjectionID.value = currentProjection.id;
   Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
     if (uniforms[key]) {
       uniforms[key].value = val;
