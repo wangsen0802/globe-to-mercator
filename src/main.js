@@ -43,7 +43,8 @@ controls.maxDistance = 8;
 const textureLoader = new THREE.TextureLoader();
 
 // 使用免费的地球纹理
-const EARTH_TEXTURE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+// const EARTH_TEXTURE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const EARTH_TEXTURE_URL = './assets/earth-blue-marble.jpg';
 
 function createGlobe(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;

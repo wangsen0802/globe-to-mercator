@@ -30,11 +30,12 @@ void main() {
   float latLines = abs(sin(v * PI * 6.0));
 
   float gridLine = 1.0;
-  float lineWidth = 0.03;
+  float lineWidth = 0.01;
   if (lonLines < lineWidth) gridLine = 0.0;
   if (latLines < lineWidth) gridLine = 0.0;
 
-  float gridAlpha = sin(uProgress * PI) * 0.3;
+  // 球形时也显示经纬线（基础值 0.15），过渡时额外增强
+  float gridAlpha = 0.5 + sin(uProgress * PI) * 0.3;
   color = mix(color, vec3(0.3, 0.7, 1.0), (1.0 - gridLine) * gridAlpha);
 
   // ===== 过渡中的能量线条 =====
