@@ -163,7 +163,7 @@ function easeInOutCubic(t) {
 }
 
 function jsProjectMercator(lon, lat) {
-  return [lon, Math.max(-2.5, Math.min(2.5, Math.log(Math.tan(PI / 4 + lat / 2)))), 0];
+  return [lon, Math.max(-PI, Math.min(PI, Math.log(Math.tan(PI / 4 + lat / 2)))), 0];
 }
 
 function jsProjectPlateCarree(lon, lat) {
