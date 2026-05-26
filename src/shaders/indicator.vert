@@ -122,5 +122,5 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);
 
   // 微小 z 偏移，确保指标始终在地球表面之上（避免 z-fighting）
-  gl_Position.z -= 0.002;
+  gl_Position.z -= 0.007;
 }
