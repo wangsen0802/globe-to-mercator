@@ -84,36 +84,37 @@ const COUNTRY_DATA = [
 
 /**
  * 将 [lon, lat] 坐标数组转换为球面 BufferGeometry
- * @param {number[][]} coords - [[lon, lat], ...] 度数
- * @param {boolean} close - 是否闭合多边形（添加首尾连线）
+ * @param {number[][]} coords - [[lon, lat], ...] 度数（首尾闭合）
  * @returns {{ fillGeo: THREE.BufferGeometry, lineGeo: THREE.BufferGeometry }}
  */
 function createPolygonGeometries(coords) {
+  // 去掉末尾闭合点（Shape 自动闭合），若未闭合则原样使用
+  const isClosed = coords.length > 1 &&
+    coords[0][0] === coords[coords.length - 1][0] &&
+    coords[0][1] === coords[coords.length - 1][1];
+  const open = isClosed ? coords.slice(0, -1) : coords;
+
+  // 用 THREE.Shape + ShapeGeometry 实现耳切三角化（避免扇形三角化的辐射状拓扑）
+  const shape = new THREE.Shape();
+  shape.moveTo(open[0][0], open[0][1]);
+  for (let i = 1; i < open.length; i++) {
+    shape.lineTo(open[i][0], open[i][1]);
+  }
+
+  const tmpGeo = new THREE.ShapeGeometry(shape);
+  const tmpPos = tmpGeo.getAttribute('position');
+  const tmpIdx = tmpGeo.getIndex();
+
+  // 将 2D (lon°, lat°) 顶点 → 3D 球面坐标 + lat/lon 属性
   const positions = [];
   const latitudes = [];
   const longitudes = [];
 
-  // 计算质心用于扇形三角化
-  let cx = 0, cy = 0;
-  for (const [lon, lat] of coords) { cx += lon; cy += lat; }
-  cx /= coords.length;
-  cy /= coords.length;
-
-  // 添加质心作为第一个顶点（索引 0）— 用于填充三角扇
-  const cLatRad = cy * DEG2RAD;
-  const cLonRad = cx * DEG2RAD;
-  positions.push(
-    Math.cos(cLatRad) * Math.sin(cLonRad),
-    Math.sin(cLatRad),
-    Math.cos(cLatRad) * Math.cos(cLonRad)
-  );
-  latitudes.push(cLatRad);
-  longitudes.push(cLonRad);
-
-  // 轮廓顶点（索引 1 起）
-  for (const [lon, lat] of coords) {
-    const latRad = lat * DEG2RAD;
-    const lonRad = lon * DEG2RAD;
+  for (let i = 0; i < tmpPos.count; i++) {
+    const lonDeg = tmpPos.getX(i);
+    const latDeg = tmpPos.getY(i);
+    const latRad = latDeg * DEG2RAD;
+    const lonRad = lonDeg * DEG2RAD;
     positions.push(
       Math.cos(latRad) * Math.sin(lonRad),
       Math.sin(latRad),
@@ -122,23 +123,30 @@ function createPolygonGeometries(coords) {
     latitudes.push(latRad);
     longitudes.push(lonRad);
   }
-
-  // 填充几何体（三角扇）
-  const fillIndices = [];
-  for (let i = 1; i < coords.length; i++) {
-    fillIndices.push(0, i, i + 1);
-  }
+  tmpGeo.dispose();
 
   const fillGeo = new THREE.BufferGeometry();
   fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   fillGeo.setAttribute('aLatitude', new THREE.Float32BufferAttribute(latitudes, 1));
   fillGeo.setAttribute('aLongitude', new THREE.Float32BufferAttribute(longitudes, 1));
-  fillGeo.setIndex(fillIndices);
+  fillGeo.setIndex(Array.from(tmpIdx.array));
 
-  // 轮廓线几何体（仅轮廓顶点，不含质心）
-  const linePositions = positions.slice(3);  // 跳过质心
-  const lineLatitudes = latitudes.slice(1);
-  const lineLongitudes = longitudes.slice(1);
+  // 轮廓线几何体（仅边界顶点，无质心）
+  const linePositions = [];
+  const lineLatitudes = [];
+  const lineLongitudes = [];
+
+  for (const [lon, lat] of open) {
+    const latRad = lat * DEG2RAD;
+    const lonRad = lon * DEG2RAD;
+    linePositions.push(
+      Math.cos(latRad) * Math.sin(lonRad),
+      Math.sin(latRad),
+      Math.cos(latRad) * Math.cos(lonRad)
+    );
+    lineLatitudes.push(latRad);
+    lineLongitudes.push(lonRad);
+  }
 
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
@@ -160,7 +168,7 @@ export function createAreaComparison(uniforms) {
   for (const country of COUNTRY_DATA) {
     const { fillGeo, lineGeo } = createPolygonGeometries(country.coords);
 
-    // 填充材质（半透明）
+    // 填充材质（半透明，FrontSide 避免 DoubleSide alpha 双重混合导致三角边线可见）
     const fillMat = new THREE.ShaderMaterial({
       vertexShader: indicatorVert,
       fragmentShader: outlineFrag,
@@ -170,7 +178,7 @@ export function createAreaComparison(uniforms) {
         uOpacity: { value: 0.35 }
       },
       transparent: true,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -4,
