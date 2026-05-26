@@ -33,6 +33,7 @@ export function initIndicatorPanel(opts) {
   const distSection = el('div', 'ind-section');
   distSection.appendChild(el('div', 'ind-section-label', '变形指标'));
 
+  distSection.appendChild(createToggle('toggle-grid', '经纬线', true, (v) => opts.onGridToggle(v)));
   distSection.appendChild(createToggle('toggle-tissot', '朝索变形椭圆', true, (v) => opts.onTissotToggle(v)));
   distSection.appendChild(createToggle('toggle-area', '面积比较', false, (v) => opts.onAreaToggle(v)));
 

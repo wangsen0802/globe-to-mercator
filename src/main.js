@@ -77,6 +77,7 @@ function createGlobe(texture) {
     uConicStdLat: sharedUniforms.uConicStdLat,
     uAzimuthalType: sharedUniforms.uAzimuthalType,
     uTexture: { value: texture },
+    uShowGrid: { value: showGrid ? 1.0 : 0.0 },
     uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
     uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() },
     uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },
@@ -132,6 +133,7 @@ greatCircleRoutes.group.visible = false;
 // ===== 初始化场景 =====
 const stars = createStars();
 let globe = null;
+let showGrid = true;  // 缓存经纬线开关状态，globe 异步加载后读取
 
 textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
   globe = createGlobe(texture);
@@ -211,7 +213,11 @@ initPanel(currentProjection);
 initIndicatorPanel({
   onTissotToggle: (visible) => { tissotIndicators.group.visible = visible; },
   onAreaToggle: (visible) => { areaComparison.group.visible = visible; },
-  onRouteToggle: (visible) => { greatCircleRoutes.group.visible = visible; }
+  onRouteToggle: (visible) => { greatCircleRoutes.group.visible = visible; },
+  onGridToggle: (visible) => {
+    showGrid = visible;
+    if (globe) globe.material.uniforms.uShowGrid.value = visible ? 1.0 : 0.0;
+  }
 });
 
 // ===== 动画循环 =====

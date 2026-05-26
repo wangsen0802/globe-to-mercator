@@ -110,6 +110,119 @@ function createOutlineGeometry(latCenter, lonCenter) {
 }
 
 /**
+ * 在 180° 经线上创建拆分的两个半圆几何体（填充用）
+ * 180° 经线上的圆会跨越日期变更线，需要拆成左右两个半圆
+ * @param {number} latCenter - 圆心纬度（弧度）
+ * @returns {THREE.BufferGeometry[]} [左半圆, 右半圆]
+ */
+function createSplitCircleGeometries(latCenter) {
+  const halfSeg = Math.ceil(CIRCLE_SEGMENTS / 2);
+  const results = [];
+
+  for (const side of [-1, 1]) {
+    const positions = [];
+    const lats = [];
+    const lons = [];
+    const indices = [];
+
+    // θ ∈ [0, π] → sin(θ) ≥ 0 → lon 偏正 → 归到 -π 侧
+    // θ ∈ [π, 2π] → sin(θ) ≤ 0 → lon 偏负 → 归到 +π 侧
+    const tStart = side === -1 ? 0 : Math.PI;
+    const tEnd = side === -1 ? Math.PI : Math.PI * 2;
+    const centerLon = side * Math.PI;
+
+    // 中心点
+    positions.push(
+      Math.cos(latCenter) * Math.sin(centerLon),
+      Math.sin(latCenter),
+      Math.cos(latCenter) * Math.cos(centerLon)
+    );
+    lats.push(latCenter);
+    lons.push(centerLon);
+
+    // 半圆弧顶点
+    for (let i = 0; i <= halfSeg; i++) {
+      const theta = tStart + (i / halfSeg) * (tEnd - tStart);
+      const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
+      const lonRaw = Math.PI + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
+
+      const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
+
+      // 强制经度到对应侧：-π 侧减 2π，+π 侧保持原值
+      const lon = side === -1 ? lonRaw - Math.PI * 2 : lonRaw;
+
+      positions.push(
+        Math.cos(clampedLat) * Math.sin(lon),
+        Math.sin(clampedLat),
+        Math.cos(clampedLat) * Math.cos(lon)
+      );
+      lats.push(clampedLat);
+      lons.push(lon);
+    }
+
+    // 扇形三角形索引
+    for (let i = 1; i <= halfSeg; i++) {
+      indices.push(0, i, i + 1);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('aLatitude', new THREE.Float32BufferAttribute(lats, 1));
+    geo.setAttribute('aLongitude', new THREE.Float32BufferAttribute(lons, 1));
+    geo.setIndex(indices);
+
+    results.push(geo);
+  }
+
+  return results;
+}
+
+/**
+ * 在 180° 经线上创建拆分的两个半圆边线几何体
+ * @param {number} latCenter - 圆心纬度（弧度）
+ * @returns {THREE.BufferGeometry[]} [左半圆边线, 右半圆边线]
+ */
+function createSplitOutlineGeometries(latCenter) {
+  const halfSeg = Math.ceil(CIRCLE_SEGMENTS / 2);
+  const results = [];
+
+  for (const side of [-1, 1]) {
+    const positions = [];
+    const lats = [];
+    const lons = [];
+
+    const tStart = side === -1 ? 0 : Math.PI;
+    const tEnd = side === -1 ? Math.PI : Math.PI * 2;
+
+    for (let i = 0; i <= halfSeg; i++) {
+      const theta = tStart + (i / halfSeg) * (tEnd - tStart);
+      const lat = latCenter + CIRCLE_RADIUS * Math.cos(theta);
+      const lonRaw = Math.PI + CIRCLE_RADIUS * Math.sin(theta) / Math.max(Math.cos(latCenter), 0.01);
+
+      const clampedLat = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, lat));
+      const lon = side === -1 ? lonRaw - Math.PI * 2 : lonRaw;
+
+      positions.push(
+        Math.cos(clampedLat) * Math.sin(lon),
+        Math.sin(clampedLat),
+        Math.cos(clampedLat) * Math.cos(lon)
+      );
+      lats.push(clampedLat);
+      lons.push(lon);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('aLatitude', new THREE.Float32BufferAttribute(lats, 1));
+    geo.setAttribute('aLongitude', new THREE.Float32BufferAttribute(lons, 1));
+
+    results.push(geo);
+  }
+
+  return results;
+}
+
+/**
  * 创建朝索变形椭圆指示器组
  * @param {Object} uniforms - 与主地球共享的 uniform 对象
  * @returns {{ group: THREE.Group, fillMaterial: THREE.ShaderMaterial, outlineMaterial: THREE.ShaderMaterial }}
@@ -144,7 +257,7 @@ export function createTissotIndicators(uniforms) {
     depthWrite: false
   });
 
-  // 在 -60°~60° 纬度范围内，每隔 30° 放置圆（跳过 ±180° 经线，避免跨日期变更线拉伸）
+  // 在 -60°~60° 纬度范围内，每隔 30° 放置圆
   for (let lat = -60; lat <= 60; lat += LAT_STEP) {
     for (let lon = -150; lon < 180; lon += LON_STEP) {
       const latRad = lat * DEG2RAD;
@@ -162,7 +275,7 @@ export function createTissotIndicators(uniforms) {
     }
   }
 
-  // 高纬度区域（±75°），每隔 60° 经度放一个（跳过 ±180°）
+  // 高纬度区域（±75°），每隔 60° 经度放一个
   for (const lat of [-75, 75]) {
     for (let lon = -120; lon < 180; lon += 60) {
       const latRad = lat * DEG2RAD;
@@ -176,6 +289,23 @@ export function createTissotIndicators(uniforms) {
       const outlineLine = new THREE.Line(outlineGeo, outlineMaterial);
       group.add(outlineLine);
     }
+  }
+
+  // 180° 经线上的圆：拆分为两个半圆，避免跨日期变更线拉伸
+  const splitLats = [];
+  for (let lat = -60; lat <= 60; lat += LAT_STEP) splitLats.push(lat);
+  splitLats.push(-75, 75);
+
+  for (const lat of splitLats) {
+    const latRad = lat * DEG2RAD;
+
+    const [leftFill, rightFill] = createSplitCircleGeometries(latRad);
+    group.add(new THREE.Mesh(leftFill, fillMaterial));
+    group.add(new THREE.Mesh(rightFill, fillMaterial));
+
+    const [leftOutline, rightOutline] = createSplitOutlineGeometries(latRad);
+    group.add(new THREE.Line(leftOutline, outlineMaterial));
+    group.add(new THREE.Line(rightOutline, outlineMaterial));
   }
 
   return { group, fillMaterial, outlineMaterial };

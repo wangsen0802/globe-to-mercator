@@ -255,7 +255,58 @@ function createCitySprite(name) {
     sizeAttenuation: true,
   }));
   sprite.scale.set(0.4, 0.1, 1);
+  // 锚点对齐到圆点标记位置（canvas 中圆点在 x=28/256），使标记点精确指向城市坐标
+  sprite.center.set(28 / 256, 0.5);
   return sprite;
+}
+
+// --- 大圆航线发光效果 ---
+
+// 创建发光径向渐变纹理
+function createGlowTexture() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+  gradient.addColorStop(0.3, 'rgba(79, 195, 247, 0.25)');
+  gradient.addColorStop(1, 'rgba(79, 195, 247, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  return texture;
+}
+
+const glowTexture = createGlowTexture();
+
+// 沿大圆航线创建发光粒子
+function createGlowPoints(points) {
+  const positions = new Float32Array(points.length * 3);
+  for (let i = 0; i < points.length; i++) {
+    const [x, y, z] = latLonToXYZ(points[i].lat, points[i].lon);
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    map: glowTexture,
+    size: 0.06,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+    color: GC_COLOR,
+    sizeAttenuation: true,
+  });
+
+  return new THREE.Points(geometry, material);
 }
 
 // --- 工厂函数（导出）---
@@ -263,6 +314,7 @@ function createCitySprite(name) {
 export function createGreatCircleRoutes(uniforms) {
   const group = new THREE.Group();
   const sprites = [];
+  const glowData = []; // { points, latLons }
 
   for (const route of ROUTES) {
     for (const mesh of createRouteLines(route, uniforms)) {
@@ -277,12 +329,31 @@ export function createGreatCircleRoutes(uniforms) {
       group.add(sprite);
       sprites.push({ sprite, lat, lon });
     }
+
+    // 大圆航线发光粒子（仅大圆航线，恒向线不加）
+    const gcPoints = generateGreatCirclePoints(route.from, route.to);
+    for (const seg of splitAtDateLine(gcPoints)) {
+      if (seg.length < 2) continue;
+      const glow = createGlowPoints(seg);
+      group.add(glow);
+      glowData.push({ points: glow, latLons: seg });
+    }
   }
 
   function updateLabels(progress) {
+    // 更新城市标签位置
     for (const { sprite, lat, lon } of sprites) {
       const p = computeLabelPosition(lat, lon, progress, uniforms);
       sprite.position.set(p[0], p[1], p[2]);
+    }
+    // 更新发光粒子位置（跟随投影变换）
+    for (const { points, latLons } of glowData) {
+      const posAttr = points.geometry.getAttribute('position');
+      for (let i = 0; i < latLons.length; i++) {
+        const p = computeLabelPosition(latLons[i].lat, latLons[i].lon, progress, uniforms);
+        posAttr.setXYZ(i, p[0], p[1], p[2]);
+      }
+      posAttr.needsUpdate = true;
     }
   }
 

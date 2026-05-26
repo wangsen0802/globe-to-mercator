@@ -1,5 +1,6 @@
 uniform sampler2D uTexture;
 uniform float uProgress;
+uniform float uShowGrid;
 uniform vec3 uLightDir;
 uniform vec3 uLightDir2;
 uniform vec3 uLightDir3;
@@ -46,17 +47,19 @@ void main() {
   vec3 color = ambient + diffuse;
 
   // ===== 网格线（经纬线） =====
-  float lonLines = abs(sin(u * PI * 12.0));
-  float latLines = abs(sin(v * PI * 6.0));
+  if (uShowGrid > 0.5) {
+    float lonLines = abs(sin(u * PI * 12.0));
+    float latLines = abs(sin(v * PI * 6.0));
 
-  float gridLine = 1.0;
-  float lineWidth = 0.01;
-  if (lonLines < lineWidth) gridLine = 0.0;
-  if (latLines < lineWidth) gridLine = 0.0;
+    float gridLine = 1.0;
+    float lineWidth = 0.01;
+    if (lonLines < lineWidth) gridLine = 0.0;
+    if (latLines < lineWidth) gridLine = 0.0;
 
-  // 球形时也显示经纬线（基础值 0.15），过渡时额外增强
-  float gridAlpha = 0.5 + sin(uProgress * PI) * 0.3;
-  color = mix(color, vec3(0.3, 0.7, 1.0), (1.0 - gridLine) * gridAlpha);
+    // 球形时也显示经纬线（基础值 0.15），过渡时额外增强
+    float gridAlpha = 0.5 + sin(uProgress * PI) * 0.3;
+    color = mix(color, vec3(0.3, 0.7, 1.0), (1.0 - gridLine) * gridAlpha);
+  }
 
   // ===== 过渡中的能量线条 =====
   float edgeGlow = exp(-pow((vLocalProgress - 0.5) * 4.0, 2.0));
