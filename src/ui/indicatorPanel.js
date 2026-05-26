@@ -43,27 +43,6 @@ export function initIndicatorPanel(opts) {
   });
   section.appendChild(areaRow);
 
-  // 大圆航线开关
-  const routeRow = createToggleRow('toggle-route', '大圆航线', false, (checked) => {
-    opts.onRouteToggle(checked);
-  });
-  section.appendChild(routeRow);
-
-  // 航线图例
-  const routeLegend = el('div', 'area-info');
-  routeLegend.id = 'route-legend';
-  routeLegend.style.display = 'none';
-
-  const legendTitle = el('div', '');
-  legendTitle.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px;margin-bottom:4px;';
-  legendTitle.textContent = '航线类型';
-  routeLegend.appendChild(legendTitle);
-
-  routeLegend.appendChild(createLegendRow('#4fc3f7', '大圆（最短路径）'));
-  routeLegend.appendChild(createLegendRow('#ff9800', '恒向线（等角航线）'));
-
-  section.appendChild(routeLegend);
-
   // 面积信息区域（初始隐藏）
   const areaInfo = el('div', 'area-info');
   areaInfo.id = 'area-info';
@@ -84,6 +63,36 @@ export function initIndicatorPanel(opts) {
 
   section.appendChild(areaInfo);
   panelEl.appendChild(section);
+
+  // ===== 航线指标（独立 section） =====
+  const routeSection = el('div', 'panel-section');
+  routeSection.style.marginTop = '8px';
+  routeSection.style.paddingTop = '12px';
+  routeSection.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+
+  routeSection.appendChild(el('div', 'panel-section-title', '航线指标'));
+
+  // 大圆航线开关
+  const routeRow = createToggleRow('toggle-route', '大圆航线', false, (checked) => {
+    opts.onRouteToggle(checked);
+  });
+  routeSection.appendChild(routeRow);
+
+  // 航线图例
+  const routeLegend = el('div', 'area-info');
+  routeLegend.id = 'route-legend';
+  routeLegend.style.display = 'none';
+
+  const legendTitle = el('div', '');
+  legendTitle.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px;margin-bottom:4px;';
+  legendTitle.textContent = '航线类型';
+  routeLegend.appendChild(legendTitle);
+
+  routeLegend.appendChild(createLegendRow('#4fc3f7', '大圆（最短路径）'));
+  routeLegend.appendChild(createLegendRow('#ff9800', '恒向线（等角航线）'));
+
+  routeSection.appendChild(routeLegend);
+  panelEl.appendChild(routeSection);
 }
 
 function createAreaRow(color, name, area) {
