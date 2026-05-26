@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import glslInclude from './vite-plugin-glsl-include.js';
 
 export default defineConfig({
   root: '.',
@@ -6,5 +7,6 @@ export default defineConfig({
     port: 3000,
     open: true
   },
+  plugins: [glslInclude()],
   assetsInclude: ['**/*.glsl']
 });

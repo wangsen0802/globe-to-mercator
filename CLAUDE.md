@@ -14,17 +14,35 @@ Three.js + GLSL shader 项目：将 3D 地球（球体）通过顶点着色器�
 ```
 src/
 ├── main.js              # 入口：场景、相机、控制器、纹理加载、滑块交互
+├── projections/         # 投影注册表，驱动按钮和面板
+├── indicators/
+│   ├── tissot.js        # 朝索变形椭圆指示器
+│   └── areaComparison.js # 面积比较指示器（格陵兰/非洲/南美洲轮廓）
+├── ui/
+│   ├── projectionPanel.js  # 投影教育信息面板
+│   └── indicatorPanel.js   # 指标开关面板
 └── shaders/
-    ├── globe.vert       # 顶点着色器：球面→墨卡托变形 + 剥橘子缓动
-    └── globe.frag       # 片段着色器：纹理采样、光照、经纬线、边缘高光
+    ├── globe.vert       # 地球顶点着色器：球面→投影变形 + 剥橘子缓动
+    ├── globe.frag       # 地球片段着色器：纹理采样、光照、经纬线
+    ├── indicator.vert   # 指标顶点着色器（朝索+面积轮廓共用）
+    ├── tissot.frag      # 朝索圆变形着色
+    └── outline.frag     # 轮廓线/填充着色
 ```
 
 ## 关键实现
 
 - **变形原理**: 顶点着色器中将每个顶点的球面坐标 `(x,y,z)` 转换为经纬度，再映射到墨卡托坐标 `(lon, mercY, 0)`，通过 `mix()` 插值实现平滑过渡
 - **剥橘子效果**: 赤道区域先展开，两极延迟（`localDelay = normalizedLat² * uSpreadDelay`），用 easeInOutCubic 缓动
-- **纹理来源**: NASA Blue Marble，通过 unpkg CDN 从 `three-globe` 包加载，失败时用 Canvas 绘制备用纹理
+- **纹理来源**: 本地 `assets/earth-blue-marble.jpg`，失败时用 Canvas 绘制备用纹理
 - **球体细分**: 360x180 段，保证变形时足够的顶点密度
+- **多投影支持**: 墨卡托(3857)、等距柱状(4326)、圆锥、方位（正射/立体），通过 uProjectionID 切换
+- **共享 uniform**: `sharedUniforms` 对象被地球和指标系统共用，切换投影时自动同步
+
+## ⚠️ 重要：投影函数单源维护
+
+共享投影函数提取在 `src/shaders/common/projections.glsl`，通过 Vite 插件 `vite-plugin-glsl-include.js` 处理 `#include` 指令注入到各着色器。
+
+**修改投影参数只需改 `projections.glsl` 一个文件**，所有引用它的着色器自动同步。着色器中用 `#include common/projections.glsl` 引入。
 
 ## 开发命令
 

@@ -1,5 +1,4 @@
 // 指标系统共享顶点着色器 — 朝索椭圆和面积轮廓共用
-// 与 globe.vert 使用相同的投影函数，但通过属性接收经纬度
 
 uniform float uProgress;
 uniform float uSpreadDelay;
@@ -14,58 +13,7 @@ attribute float aLongitude;
 varying float vDistortion;    // 面积变形因子（1.0=无变形）
 varying float vLocalProgress; // 局部展开进度
 
-#define PI 3.14159265359
-
-// 缓动函数
-float easeInOutCubic(float t) {
-  return t < 0.5
-    ? 4.0 * t * t * t
-    : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
-}
-
-// ===== 投影函数（与 globe.vert 一致） =====
-
-vec3 projectMercator(float lon, float lat) {
-  float mercX = lon;
-  float mercY = log(tan(PI / 4.0 + lat / 2.0));
-  mercY = clamp(mercY, -2.5, 2.5);
-  return vec3(mercX, mercY, 0.0);
-}
-
-vec3 projectPlateCarree(float lon, float lat) {
-  return vec3(lon, lat, 0.0);
-}
-
-vec3 projectConic(float lon, float lat, float stdLat) {
-  float n = sin(clamp(stdLat, 0.1, 1.4));
-  float tanStd = max(tan(PI / 4.0 + stdLat / 2.0), 0.001);
-  float F = cos(stdLat) * pow(tanStd, n) / max(n, 0.01);
-  float clampedLat = clamp(lat, -1.3, 1.3);
-  float tanLat = max(tan(PI / 4.0 + clampedLat / 2.0), 0.001);
-  float rho = F / pow(tanLat, n);
-  float tanEq = max(tan(PI / 4.0), 0.001);
-  float rhoEq = F / pow(tanEq, n);
-  float theta = n * lon;
-  return vec3(rho * sin(theta), rhoEq - rho * cos(theta), 0.0);
-}
-
-vec3 projectAzimuthal(float lon, float lat, float type) {
-  if (type < 0.5) {
-    float x = cos(lat) * sin(lon);
-    float y = sin(lat);
-    float cosC = cos(lat) * cos(lon);
-    float z = min(cosC, 0.0) * 0.08;
-    return vec3(x, y, z);
-  } else {
-    float clampedLat = clamp(lat, -1.4, 1.4);
-    float k = 2.0 / max(1.0 + sin(clampedLat), 0.01);
-    return vec3(
-      k * cos(clampedLat) * sin(lon),
-      k * cos(clampedLat) * cos(lon),
-      0.0
-    );
-  }
-}
+#include common/projections.glsl
 
 // 根据当前投影 ID 选择投影函数
 vec3 applyProjection(float lon, float lat) {
