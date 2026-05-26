@@ -13,7 +13,6 @@ varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
 varying float vLongitude;
-varying float vFade;
 
 #define PI 3.14159265359
 
@@ -65,7 +64,12 @@ vec3 projectConic(float lon, float lat, float stdLat) {
 vec3 projectAzimuthal(float lon, float lat, float type) {
   if (type < 0.5) {
     // 正射投影 (Orthographic) — 从无穷远处看地球
-    return vec3(cos(lat) * sin(lon), sin(lat), 0.0);
+    float x = cos(lat) * sin(lon);
+    float y = sin(lat);
+    // 背面半球略微后移，旋转时正面/背面各自可见
+    float cosC = cos(lat) * cos(lon);
+    float z = min(cosC, 0.0) * 0.08;
+    return vec3(x, y, z);
   } else {
     // 立体投影 (Stereographic) — 保角，极地地图常用
     float clampedLat = clamp(lat, -1.4, 1.4);
@@ -110,15 +114,6 @@ void main() {
 
   localProgress = easeInOutCubic(localProgress);
   vLocalProgress = localProgress;
-
-  // ===== 正射投影：背面半球渐隐 =====
-  // 球体状态不裁剪，展开过程中背面逐渐消失
-  vFade = 1.0;
-  if (uProjectionID > 2.5 && uAzimuthalType < 0.5) {
-    float cosC = cos(latitude) * cos(longitude);  // >0 正面, <0 背面
-    float visibility = smoothstep(-0.05, 0.1, cosC);
-    vFade = mix(1.0, visibility, localProgress);
-  }
 
   // 在球面和平面之间插值位置
   vec3 finalPos = mix(spherePos, flatPos, localProgress);
