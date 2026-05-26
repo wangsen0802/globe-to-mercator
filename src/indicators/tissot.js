@@ -144,9 +144,9 @@ export function createTissotIndicators(uniforms) {
     depthWrite: false
   });
 
-  // 在 -60°~60° 纬度范围内，每隔 30° 放置圆
+  // 在 -60°~60° 纬度范围内，每隔 30° 放置圆（跳过 ±180° 经线，避免跨日期变更线拉伸）
   for (let lat = -60; lat <= 60; lat += LAT_STEP) {
-    for (let lon = -180; lon < 180; lon += LON_STEP) {
+    for (let lon = -150; lon < 180; lon += LON_STEP) {
       const latRad = lat * DEG2RAD;
       const lonRad = lon * DEG2RAD;
 
@@ -162,9 +162,9 @@ export function createTissotIndicators(uniforms) {
     }
   }
 
-  // 高纬度区域（±75°），每隔 60° 经度放一个
+  // 高纬度区域（±75°），每隔 60° 经度放一个（跳过 ±180°）
   for (const lat of [-75, 75]) {
-    for (let lon = -180; lon < 180; lon += 60) {
+    for (let lon = -120; lon < 180; lon += 60) {
       const latRad = lat * DEG2RAD;
       const lonRad = lon * DEG2RAD;
 
