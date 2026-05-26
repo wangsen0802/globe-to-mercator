@@ -7,10 +7,14 @@ varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
 varying float vLongitude;
+varying float vFade;
 
 #define PI 3.14159265359
 
 void main() {
+  // 正射投影背面半球裁剪
+  if (vFade < 0.01) discard;
+
   // 从经纬度计算精确的纹理坐标（而非依赖插值的 UV）
   // 纹理是等距柱状投影，所以直接用经纬度映射即可
   float u = (vLongitude + PI) / (2.0 * PI);

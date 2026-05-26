@@ -13,6 +13,7 @@ varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
 varying float vLongitude;
+varying float vFade;
 
 #define PI 3.14159265359
 
@@ -109,6 +110,15 @@ void main() {
 
   localProgress = easeInOutCubic(localProgress);
   vLocalProgress = localProgress;
+
+  // ===== 正射投影：背面半球渐隐 =====
+  // 球体状态不裁剪，展开过程中背面逐渐消失
+  vFade = 1.0;
+  if (uProjectionID > 2.5 && uAzimuthalType < 0.5) {
+    float cosC = cos(latitude) * cos(longitude);  // >0 正面, <0 背面
+    float visibility = smoothstep(-0.05, 0.1, cosC);
+    vFade = mix(1.0, visibility, localProgress);
+  }
 
   // 在球面和平面之间插值位置
   vec3 finalPos = mix(spherePos, flatPos, localProgress);
