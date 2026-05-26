@@ -7,6 +7,7 @@ import { getAllProjections, getProjection } from './projections/index.js';
 import { initPanel, updatePanel } from './ui/projectionPanel.js';
 import { createTissotIndicators } from './indicators/tissot.js';
 import { createAreaComparison } from './indicators/areaComparison.js';
+import { createGreatCircleRoutes } from './indicators/greatCircleRoutes.js';
 import { initIndicatorPanel } from './ui/indicatorPanel.js';
 
 // ===== 全局状态 =====
@@ -124,6 +125,10 @@ const areaComparison = createAreaComparison(sharedUniforms);
 scene.add(areaComparison.group);
 areaComparison.group.visible = false; // 默认关闭面积比较
 
+const greatCircleRoutes = createGreatCircleRoutes(sharedUniforms);
+scene.add(greatCircleRoutes.group);
+greatCircleRoutes.group.visible = false;
+
 // ===== 初始化场景 =====
 const stars = createStars();
 let globe = null;
@@ -205,7 +210,8 @@ initPanel(currentProjection);
 // ===== 指标开关面板初始化 =====
 initIndicatorPanel({
   onTissotToggle: (visible) => { tissotIndicators.group.visible = visible; },
-  onAreaToggle: (visible) => { areaComparison.group.visible = visible; }
+  onAreaToggle: (visible) => { areaComparison.group.visible = visible; },
+  onRouteToggle: (visible) => { greatCircleRoutes.group.visible = visible; }
 });
 
 // ===== 动画循环 =====
@@ -216,12 +222,14 @@ function animate() {
 
   // 更新共享进度 uniform（地球和指标同步）
   sharedUniforms.uProgress.value = progress;
+  greatCircleRoutes.updateLabels(progress);
 
   if (progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;
     // 指标组跟随地球自转
     tissotIndicators.group.rotation.y = globe.mesh.rotation.y;
     areaComparison.group.rotation.y = globe.mesh.rotation.y;
+    greatCircleRoutes.group.rotation.y = globe.mesh.rotation.y;
   }
 
   stars.rotation.y += 0.0001;

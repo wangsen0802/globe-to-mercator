@@ -19,6 +19,7 @@ function el(tag, className, text) {
  * @param {Object} opts - 回调函数
  * @param {Function} opts.onTissotToggle - 朝索椭圆开关回调
  * @param {Function} opts.onAreaToggle - 面积比较开关回调
+ * @param {Function} opts.onRouteToggle - 大圆航线开关回调
  */
 export function initIndicatorPanel(opts) {
   callbacks = opts;
@@ -41,6 +42,27 @@ export function initIndicatorPanel(opts) {
     opts.onAreaToggle(checked);
   });
   section.appendChild(areaRow);
+
+  // 大圆航线开关
+  const routeRow = createToggleRow('toggle-route', '大圆航线', false, (checked) => {
+    opts.onRouteToggle(checked);
+  });
+  section.appendChild(routeRow);
+
+  // 航线图例
+  const routeLegend = el('div', 'area-info');
+  routeLegend.id = 'route-legend';
+  routeLegend.style.display = 'none';
+
+  const legendTitle = el('div', '');
+  legendTitle.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);margin-top:8px;margin-bottom:4px;';
+  legendTitle.textContent = '航线类型';
+  routeLegend.appendChild(legendTitle);
+
+  routeLegend.appendChild(createLegendRow('#4fc3f7', '大圆（最短路径）'));
+  routeLegend.appendChild(createLegendRow('#ff9800', '恒向线（等角航线）'));
+
+  section.appendChild(routeLegend);
 
   // 面积信息区域（初始隐藏）
   const areaInfo = el('div', 'area-info');
@@ -75,6 +97,18 @@ function createAreaRow(color, name, area) {
   return row;
 }
 
+function createLegendRow(color, label) {
+  const row = el('div', 'area-row');
+  const line = el('span', 'area-dot');
+  line.style.background = color;
+  line.style.width = '20px';
+  line.style.height = '3px';
+  line.style.borderRadius = '1px';
+  row.appendChild(line);
+  row.appendChild(el('span', '', ' ' + label));
+  return row;
+}
+
 function createToggleRow(id, label, defaultChecked, onChange) {
   const row = el('label', 'indicator-toggle');
 
@@ -96,6 +130,10 @@ function createToggleRow(id, label, defaultChecked, onChange) {
     if (id === 'toggle-area') {
       const areaInfo = document.getElementById('area-info');
       if (areaInfo) areaInfo.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    if (id === 'toggle-route') {
+      const routeLegend = document.getElementById('route-legend');
+      if (routeLegend) routeLegend.style.display = checkbox.checked ? 'block' : 'none';
     }
   });
 
