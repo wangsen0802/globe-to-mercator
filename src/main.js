@@ -3,13 +3,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import vertexShader from './shaders/globe.vert?raw';
 import fragmentShader from './shaders/globe.frag?raw';
+import { getAllProjections, getProjection } from './projections/index.js';
+import { initPanel, updatePanel } from './ui/projectionPanel.js';
 
 // ===== 全局状态 =====
 let progress = 0;
-let projectionType = 0; // 0 = Mercator(3857), 1 = Plate Carree(4326/4490)
+let currentProjection = getProjection(0);
 const LON_SEGMENTS = 360;
 const LAT_SEGMENTS = 180;
-const SPREAD_DELAY = 0.35; // 剥橘子展开延迟系数
+const SPREAD_DELAY = 0.35;
 
 // ===== 场景初始化 =====
 const container = document.getElementById('canvas-container');
@@ -42,27 +44,37 @@ controls.maxDistance = 8;
 
 // ===== 加载纹理 =====
 const textureLoader = new THREE.TextureLoader();
-
-// 使用免费的地球纹理
-// const EARTH_TEXTURE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
 const EARTH_TEXTURE_URL = './assets/earth-blue-marble.jpg';
+
+function buildUniforms() {
+  return {
+    uProgress: { value: 0.0 },
+    uSpreadDelay: { value: SPREAD_DELAY },
+    uTexture: { value: null },
+    uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
+    uProjectionID: { value: 0.0 },
+    uConicStdLat: { value: 0.5236 },
+    uAzimuthalType: { value: 0.0 }
+  };
+}
 
 function createGlobe(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
 
-  // 创建高细分球体
   const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
+  const uniforms = buildUniforms();
+  uniforms.uTexture.value = texture;
+
+  Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
+    if (uniforms[key]) {
+      uniforms[key].value = val;
+    }
+  });
 
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
-    uniforms: {
-      uProgress: { value: 0.0 },
-      uSpreadDelay: { value: SPREAD_DELAY },
-      uTexture: { value: texture },
-      uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
-      uProjectionType: { value: 0.0 }
-    },
+    uniforms,
     side: THREE.DoubleSide
   });
 
@@ -95,7 +107,6 @@ function createStars() {
 
 // ===== 初始化场景 =====
 const stars = createStars();
-
 let globe = null;
 
 textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
@@ -103,13 +114,11 @@ textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
   console.log('地球纹理加载完成');
 }, undefined, (err) => {
   console.warn('纹理加载失败，使用备用纹理', err);
-  // 备用：生成一个简单的渐变纹理
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
 
-  // 简单的蓝绿色地球
   const gradient = ctx.createLinearGradient(0, 0, 0, 512);
   gradient.addColorStop(0, '#1a3a5c');
   gradient.addColorStop(0.2, '#2d6a4f');
@@ -119,7 +128,6 @@ textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1024, 512);
 
-  // 添加一些随机的"大陆"块
   ctx.fillStyle = '#52796f';
   for (let i = 0; i < 30; i++) {
     const x = Math.random() * 1024;
@@ -135,6 +143,37 @@ textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
   globe = createGlobe(fallbackTexture);
 });
 
+// ===== 投影切换按钮（动态生成） =====
+const btnGroup = document.querySelector('.proj-btn-group');
+
+getAllProjections().forEach(proj => {
+  const btn = document.createElement('button');
+  btn.className = 'proj-btn' + (proj.id === currentProjection.id ? ' active' : '');
+  btn.dataset.projId = proj.id;
+  btn.textContent = proj.epsg.length < 14 ? proj.epsg : proj.name;
+  btn.addEventListener('click', () => switchProjection(proj.id));
+  btnGroup.appendChild(btn);
+});
+
+function switchProjection(id) {
+  currentProjection = getProjection(id);
+
+  btnGroup.querySelectorAll('.proj-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.projId) === id);
+  });
+
+  if (globe) {
+    globe.material.uniforms.uProjectionID.value = id;
+    Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
+      if (globe.material.uniforms[key]) {
+        globe.material.uniforms[key].value = val;
+      }
+    });
+  }
+
+  updatePanel(currentProjection);
+}
+
 // ===== 滑块交互 =====
 const slider = document.getElementById('progress-slider');
 const progressLabel = document.getElementById('progress-value');
@@ -144,15 +183,8 @@ slider.addEventListener('input', (e) => {
   progressLabel.textContent = e.target.value + '%';
 });
 
-// ===== 投影切换 =====
-const projButtons = document.querySelectorAll('.proj-btn');
-projButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    projectionType = parseInt(btn.dataset.type);
-    projButtons.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-});
+// ===== 教育面板初始化 =====
+initPanel(currentProjection);
 
 // ===== 动画循环 =====
 function animate() {
@@ -160,18 +192,14 @@ function animate() {
 
   controls.update();
 
-  // 更新 shader uniforms
   if (globe) {
     globe.material.uniforms.uProgress.value = progress;
-    globe.material.uniforms.uProjectionType.value = projectionType;
   }
 
-  // 球体阶段自动慢旋转
   if (progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;
   }
 
-  // 星空微旋转
   stars.rotation.y += 0.0001;
 
   renderer.render(scene, camera);
