@@ -191,6 +191,88 @@
       color: rgba(255, 255, 255, 0.4);
       margin-bottom: 4px;
     }
+
+    /* ===== 指标开关样式 ===== */
+    .indicator-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 6px 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .indicator-toggle input[type="checkbox"] {
+      display: none;
+    }
+
+    .toggle-slider {
+      width: 36px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-slider::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.25s ease;
+    }
+
+    .indicator-toggle input:checked + .toggle-slider {
+      background: #4ade80;
+    }
+
+    .indicator-toggle input:checked + .toggle-slider::after {
+      transform: translateX(16px);
+    }
+
+    .toggle-label {
+      user-select: none;
+    }
+
+    /* 面积信息 */
+    .area-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      margin-bottom: 4px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .area-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .area-value {
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-left: auto;
+    }
+
+    .area-note {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.5;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
   </style>
 </head>
 <body>

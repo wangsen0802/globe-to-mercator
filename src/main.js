@@ -5,6 +5,9 @@ import vertexShader from './shaders/globe.vert?raw';
 import fragmentShader from './shaders/globe.frag?raw';
 import { getAllProjections, getProjection } from './projections/index.js';
 import { initPanel, updatePanel } from './ui/projectionPanel.js';
+import { createTissotIndicators } from './indicators/tissot.js';
+import { createAreaComparison } from './indicators/areaComparison.js';
+import { initIndicatorPanel } from './ui/indicatorPanel.js';
 
 // ===== 全局状态 =====
 let progress = 0;
@@ -12,6 +15,20 @@ let currentProjection = getProjection(0);
 const LON_SEGMENTS = 360;
 const LAT_SEGMENTS = 180;
 const SPREAD_DELAY = 0.35;
+
+// ===== 共享 uniform（地球和指标系统共用投影参数） =====
+const sharedUniforms = {
+  uProgress: { value: 0.0 },
+  uSpreadDelay: { value: SPREAD_DELAY },
+  uProjectionID: { value: currentProjection.id },
+  uConicStdLat: { value: 0.5236 },
+  uAzimuthalType: { value: 0.0 }
+};
+
+// 同步初始投影参数
+Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
+  if (sharedUniforms[key]) sharedUniforms[key].value = val;
+});
 
 // ===== 场景初始化 =====
 const container = document.getElementById('canvas-container');
@@ -46,35 +63,24 @@ controls.maxDistance = 8;
 const textureLoader = new THREE.TextureLoader();
 const EARTH_TEXTURE_URL = './assets/earth-blue-marble.jpg';
 
-function buildUniforms() {
-  return {
-    uProgress: { value: 0.0 },
-    uSpreadDelay: { value: SPREAD_DELAY },
-    uTexture: { value: null },
-    uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },     // 主光源：右上方
-    uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() }, // 补光2：左下方偏前
-    uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },        // 补光3：正前方
-    uLightDir4: { value: new THREE.Vector3(0.7, -0.5, 0.5).normalize() }, // 补光4：右下方偏前
-    uProjectionID: { value: 0.0 },
-    uConicStdLat: { value: 0.5236 },
-    uAzimuthalType: { value: 0.0 }
-  };
-}
-
 function createGlobe(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
 
   const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
-  const uniforms = buildUniforms();
-  uniforms.uTexture.value = texture;
 
-  // 同步当前选中的投影（防止纹理加载前用户已切换投影）
-  uniforms.uProjectionID.value = currentProjection.id;
-  Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
-    if (uniforms[key]) {
-      uniforms[key].value = val;
-    }
-  });
+  // 地球 uniforms：共享投影参数 + 独有的纹理和光照
+  const uniforms = {
+    uProgress: sharedUniforms.uProgress,
+    uSpreadDelay: sharedUniforms.uSpreadDelay,
+    uProjectionID: sharedUniforms.uProjectionID,
+    uConicStdLat: sharedUniforms.uConicStdLat,
+    uAzimuthalType: sharedUniforms.uAzimuthalType,
+    uTexture: { value: texture },
+    uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
+    uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() },
+    uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },
+    uLightDir4: { value: new THREE.Vector3(0.7, -0.5, 0.5).normalize() }
+  };
 
   const material = new THREE.ShaderMaterial({
     vertexShader,
@@ -109,6 +115,14 @@ function createStars() {
   scene.add(stars);
   return stars;
 }
+
+// ===== 指标系统 =====
+const tissotIndicators = createTissotIndicators(sharedUniforms);
+scene.add(tissotIndicators.group);
+
+const areaComparison = createAreaComparison(sharedUniforms);
+scene.add(areaComparison.group);
+areaComparison.group.visible = false; // 默认关闭面积比较
 
 // ===== 初始化场景 =====
 const stars = createStars();
@@ -167,14 +181,11 @@ function switchProjection(id) {
     b.classList.toggle('active', parseInt(b.dataset.projId) === id);
   });
 
-  if (globe) {
-    globe.material.uniforms.uProjectionID.value = id;
-    Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
-      if (globe.material.uniforms[key]) {
-        globe.material.uniforms[key].value = val;
-      }
-    });
-  }
+  // 更新共享 uniform（地球和指标自动同步）
+  sharedUniforms.uProjectionID.value = id;
+  Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
+    if (sharedUniforms[key]) sharedUniforms[key].value = val;
+  });
 
   updatePanel(currentProjection);
 }
@@ -191,18 +202,26 @@ slider.addEventListener('input', (e) => {
 // ===== 教育面板初始化 =====
 initPanel(currentProjection);
 
+// ===== 指标开关面板初始化 =====
+initIndicatorPanel({
+  onTissotToggle: (visible) => { tissotIndicators.group.visible = visible; },
+  onAreaToggle: (visible) => { areaComparison.group.visible = visible; }
+});
+
 // ===== 动画循环 =====
 function animate() {
   requestAnimationFrame(animate);
 
   controls.update();
 
-  if (globe) {
-    globe.material.uniforms.uProgress.value = progress;
-  }
+  // 更新共享进度 uniform（地球和指标同步）
+  sharedUniforms.uProgress.value = progress;
 
   if (progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;
+    // 指标组跟随地球自转
+    tissotIndicators.group.rotation.y = globe.mesh.rotation.y;
+    areaComparison.group.rotation.y = globe.mesh.rotation.y;
   }
 
   stars.rotation.y += 0.0001;
