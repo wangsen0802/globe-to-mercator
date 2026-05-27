@@ -60,9 +60,20 @@ vite-plugin-glsl-include.js  # Vite 插件：处理 GLSL #include 指令
 ## 开发命令
 
 ```bash
-pnpm dev      # 启动开发服务器 (端口 3000)
-pnpm build    # 生产构建
+pnpm dev        # 启动开发服务器 (端口 3000)
+pnpm build      # 生产构建
+pnpm lint:glsl  # GLSL 着色器语法检查（展开 include + 注入 Three.js 声明 + glslangValidator）
 ```
+
+## GLSL Lint
+
+脚本 `scripts/glsl-lint.mjs` 处理流程：
+1. 递归扫描 `src/shaders/` 下的 `.vert` / `.frag` 文件（跳过 `.glsl` 共享库）
+2. 展开 `#include` 指令（复用 `vite-plugin-glsl-include.js` 逻辑）
+3. 注入 Three.js 内置声明 preamble（`position`, `projectionMatrix`, `normalMatrix` 等）
+4. 用 `glslangValidator` 验证语法
+
+前置依赖：`brew install glslang`
 
 ## 编码规范
 
