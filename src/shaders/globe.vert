@@ -23,7 +23,11 @@ void main() {
 
   // 从球面坐标计算经纬度
   float latitude = asin(clamp(normalize(position).y, -1.0, 1.0));
-  float longitude = atan(position.x, position.z);
+  // 用 UV 参数化角度计算经度，避免极点处 atan(0,0)=0 的奇异
+  // 非极点：等价于 atan(position.x, position.z)（sin(θ) 约掉）
+  // 极点：每个重复顶点有各自的 uv.x，给出正确经度
+  float phi = uv.x * 2.0 * PI;
+  float longitude = atan(-cos(phi), sin(phi));
 
   // 传递经纬度给片元着色器
   vLatitude = latitude;

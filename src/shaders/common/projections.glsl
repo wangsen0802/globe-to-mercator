@@ -14,9 +14,12 @@ float easeInOutCubic(float t) {
 
 // 墨卡托投影 (EPSG:3857)
 vec3 projectMercator(float lon, float lat) {
+  // 裁剪纬度到 ±85.05°（Web Mercator 标准：mercY = ±π 处）
+  // 先裁剪再计算，避免极点附近三角形 Y 反转
+  float maxLat = 2.0 * atan(exp(PI)) - PI * 0.5;
+  float clampedLat = clamp(lat, -maxLat, maxLat);
   float mercX = lon;
-  float mercY = log(tan(PI / 4.0 + lat / 2.0));
-  mercY = clamp(mercY, -PI, PI);
+  float mercY = log(tan(PI / 4.0 + clampedLat / 2.0));
   return vec3(mercX, mercY, 0.0);
 }
 
