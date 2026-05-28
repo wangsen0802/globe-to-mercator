@@ -10,14 +10,14 @@ varying vec3 vNormal;
 varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
-varying float vLongitude;
+varying float vRawUv;  // 原始 uv.x，线性经度下直接用作纹理 u 坐标
 
 #define PI 3.14159265359
 
 void main() {
-  // 从经纬度计算精确的纹理坐标（而非依赖插值的 UV）
-  // 纹理是等距柱状投影，所以直接用经纬度映射即可
-  float u = (vLongitude + PI) / (2.0 * PI);
+  // 线性经度参数化：longitude = uv.x * 2π - π
+  // 所以 u = (longitude + π) / (2π) = uv.x，直接用 vRawUv 即可
+  float u = vRawUv;
   float v = (vLatitude + PI / 2.0) / PI;
 
   vec4 texColor = texture2D(uTexture, vec2(u, v));

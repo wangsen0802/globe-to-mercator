@@ -66,6 +66,11 @@ const EARTH_TEXTURE_URL = './assets/earth-blue-marble.jpg';
 
 function createGlobe(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
+  // 关键：允许纹理在水平方向无缝环绕，消除经度 0°/360° 接缝
+  // texture.wrapS = THREE.RepeatWrapping;
+  // 关闭 mipmap 避免 seam 处降级采样产生黑线
+  // texture.generateMipmaps = false;
+  // texture.minFilter = THREE.LinearFilter;
 
   const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
 
@@ -88,7 +93,8 @@ function createGlobe(texture) {
     vertexShader,
     fragmentShader,
     uniforms,
-    side: THREE.DoubleSide
+    // side: THREE.DoubleSide
+    side: THREE.FrontSide
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -153,6 +159,10 @@ textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
   gradient.addColorStop(1, '#1a3a5c');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1024, 512);
+
+  // 复制最左列到最右列，使 canvas 边缘颜色一致，消除 fallback 接缝
+  const leftEdge = ctx.getImageData(0, 0, 1, 512);
+  ctx.putImageData(leftEdge, 1023, 0);
 
   ctx.fillStyle = '#52796f';
   for (let i = 0; i < 30; i++) {

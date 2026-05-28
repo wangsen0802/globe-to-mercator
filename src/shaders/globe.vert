@@ -12,7 +12,7 @@ varying vec3 vNormal;
 varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
-varying float vLongitude;
+varying float vRawUv;  // 原始 uv.x，线性经度参数化下直接作为纹理 u 坐标
 
 #include common/projections.glsl
 
@@ -23,15 +23,16 @@ void main() {
 
   // 从球面坐标计算经纬度
   float latitude = asin(clamp(normalize(position).y, -1.0, 1.0));
-  // 用 UV 参数化角度计算经度，避免极点处 atan(0,0)=0 的奇异
-  // 非极点：等价于 atan(position.x, position.z)（sin(θ) 约掉）
-  // 极点：每个重复顶点有各自的 uv.x，给出正确经度
+  // 线性经度参数化：phi ∈ [0, 2π] → longitude ∈ [-π, π]
+  // 比 atan(-cos, sin) 更优：无截断回绕，整个 [0,1] 区间连续无跳变
+  // 球面 seam 处 column 0 (lon=-π) 和 column 360 (lon=π) 位置重合但经度不同，
+  // 展开时自然分离为平面左右边缘
   float phi = uv.x * 2.0 * PI;
-  float longitude = atan(-cos(phi), sin(phi));
+  float longitude = phi - PI;
 
-  // 传递经纬度给片元着色器
+  // 传递给片元着色器
   vLatitude = latitude;
-  vLongitude = longitude;
+  vRawUv = uv.x;
 
   // 根据投影类型选择目标平面坐标
   vec3 flatPos;
