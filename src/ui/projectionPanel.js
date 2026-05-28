@@ -49,6 +49,13 @@ function renderPanel(proj) {
   distSection.appendChild(el('div', 'panel-section-title', '变形特征'));
   distSection.appendChild(el('div', 'panel-text', info.distortion));
   panelEl.appendChild(distSection);
+
+  if (info.note) {
+    const noteSection = el('div', 'panel-section');
+    noteSection.appendChild(el('div', 'panel-section-title', '备注'));
+    noteSection.appendChild(el('div', 'panel-text', info.note));
+    panelEl.appendChild(noteSection);
+  }
 }
 
 export function initPanel(proj) {
