@@ -3,7 +3,7 @@
  */
 export const conic = {
   id: 2,
-  name: '圆锥投影（Lambert）',
+  name: '圆锥投影',
   epsg: 'Lambert Conformal Conic',
   uniforms: {
     uConicStdLat: 0.5236  // 30°N，适合展示中国/中纬度区域

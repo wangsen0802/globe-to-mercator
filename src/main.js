@@ -189,7 +189,15 @@ getAllProjections().forEach(proj => {
   const btn = document.createElement('button');
   btn.className = 'proj-btn' + (proj.id === currentProjection.id ? ' active' : '');
   btn.dataset.projId = proj.id;
-  btn.textContent = proj.epsg.length < 14 ? proj.epsg : proj.name;
+  // 上行中文名，下行英文/EPSG 编号
+  const cn = document.createElement('span');
+  cn.className = 'proj-btn-cn';
+  cn.textContent = proj.name;
+  const en = document.createElement('span');
+  en.className = 'proj-btn-en';
+  en.textContent = proj.epsg;
+  btn.appendChild(cn);
+  btn.appendChild(en);
   btn.addEventListener('click', () => switchProjection(proj.id));
   btnGroup.appendChild(btn);
 });
