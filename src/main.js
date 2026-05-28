@@ -241,7 +241,7 @@ function animate() {
 
   // 更新共享进度 uniform（地球和指标同步）
   sharedUniforms.uProgress.value = progress;
-  greatCircleRoutes.updateLabels(progress);
+  greatCircleRoutes.updateLabels(progress, camera);
 
   if (progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;

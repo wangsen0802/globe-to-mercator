@@ -98,9 +98,27 @@ function splitAtDateLine(points) {
   const segments = [];
   let current = [points[0]];
   for (let i = 1; i < points.length; i++) {
-    if (Math.abs(points[i].lon - points[i - 1].lon) > PI) {
+    const dLon = points[i].lon - points[i - 1].lon;
+    if (Math.abs(dLon) > PI) {
+      // 在 180° 经线处插值出精确边界点，闭合两段线之间的空隙
+      const lon1 = points[i - 1].lon, lon2 = points[i].lon;
+      const lat1 = points[i - 1].lat, lat2 = points[i].lat;
+      let t;
+      if (dLon < -PI) {
+        // 正经度 → 负经度（跨越 +π → -π），展开 lon2 计算
+        t = (PI - lon1) / (lon2 + 2 * PI - lon1);
+      } else {
+        // 负经度 → 正经度（跨越 -π → +π），展开 lon2 计算
+        t = (-PI - lon1) / (lon2 - 2 * PI - lon1);
+      }
+      t = Math.max(0, Math.min(1, t));
+      const crossLat = lat1 + t * (lat2 - lat1);
+
+      // 当前段以 +π 边界点结尾
+      current.push({ lat: crossLat, lon: PI });
       if (current.length > 1) segments.push(current);
-      current = [points[i]];
+      // 新段以 -π 边界点起始（与 +π 在球面上是同一点）
+      current = [{ lat: crossLat, lon: -PI }, points[i]];
     } else {
       current.push(points[i]);
     }
@@ -342,12 +360,39 @@ export function createGreatCircleRoutes(uniforms) {
     }
   }
 
-  function updateLabels(progress) {
+  const _worldPos = new THREE.Vector3();
+
+  // 判断精灵在世界坐标中是否朝向相机（正面可见）
+  // 法线方向 = normalize(worldPosition)，视线 = normalize(worldPosition - cameraPosition)
+  // dot > 0 表示法线背向相机，即点在背面
+  function isFrontFacing(sprite, cameraPos) {
+    sprite.getWorldPosition(_worldPos);
+    const nx = _worldPos.x, ny = _worldPos.y, nz = _worldPos.z;
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len < 0.001) return true;
+    const vx = nx - cameraPos.x;
+    const vy = ny - cameraPos.y;
+    const vz = nz - cameraPos.z;
+    // 法线（归一化的世界位置）与视线方向的点积
+    return (nx / len * vx + ny / len * vy + nz / len * vz) <= 0;
+  }
+
+  function updateLabels(progress, camera) {
+    const camPos = camera ? camera.position : null;
+
     // 更新城市标签位置
     for (const { sprite, lat, lon } of sprites) {
       const p = computeLabelPosition(lat, lon, progress, uniforms);
       sprite.position.set(p[0], p[1], p[2]);
+
+      // 球面状态下隐藏背面标签，展开过程中逐渐恢复可见
+      if (camPos) {
+        const backFacing = !isFrontFacing(sprite, camPos);
+        // progress > 0.3 时完全展开，不再隐藏
+        sprite.visible = !(backFacing && progress < 0.3);
+      }
     }
+
     // 更新发光粒子位置（跟随投影变换）
     for (const { points, latLons } of glowData) {
       const posAttr = points.geometry.getAttribute('position');
