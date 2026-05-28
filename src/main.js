@@ -93,11 +93,14 @@ function createGlobe(texture) {
     vertexShader,
     fragmentShader,
     uniforms,
-    // side: THREE.DoubleSide
-    side: THREE.FrontSide
+    side: THREE.DoubleSide
+    // side: THREE.FrontSide
   });
 
   const mesh = new THREE.Mesh(geometry, material);
+  // 旋转球体使本初子午线（longitude 0°）面向相机（+z 方向）
+  // 线性参数化下 longitude 0° 在球面右侧 (+x)，需旋转 -90° 到前方 (+z)
+  // mesh.rotation.y = -Math.PI / 2;
   scene.add(mesh);
 
   return { mesh, material };

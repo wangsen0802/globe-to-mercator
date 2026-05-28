@@ -17,18 +17,20 @@ const RL_COLOR = 0xff9800;
 
 // --- 坐标转换 + 大圆弧 (slerp) ---
 
+// 球面坐标转换：匹配 Three.js SphereGeometry 的坐标约定
+// 经度 0° → +x 方向，经度 π/2 → -z 方向
 function latLonToXYZ(lat, lon) {
   return [
-    Math.cos(lat) * Math.sin(lon),
-    Math.sin(lat),
     Math.cos(lat) * Math.cos(lon),
+    Math.sin(lat),
+    -Math.cos(lat) * Math.sin(lon),
   ];
 }
 
 function xyzToLatLon(x, y, z) {
   return [
     Math.asin(Math.max(-1, Math.min(1, y))),
-    Math.atan2(x, z),
+    Math.atan2(-z, x),
   ];
 }
 
@@ -115,9 +117,9 @@ function createLineGeometry(points) {
   const longitudes = [];
   for (const p of points) {
     positions.push(
-      Math.cos(p.lat) * Math.sin(p.lon),
-      Math.sin(p.lat),
       Math.cos(p.lat) * Math.cos(p.lon),
+      Math.sin(p.lat),
+      -Math.cos(p.lat) * Math.sin(p.lon),
     );
     latitudes.push(p.lat);
     longitudes.push(p.lon);

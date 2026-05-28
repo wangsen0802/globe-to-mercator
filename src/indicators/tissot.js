@@ -28,14 +28,14 @@ function geodesicCirclePoint(latCenter, lonCenter, theta, radius) {
   const clat = Math.cos(latCenter), slat = Math.sin(latCenter);
   const clon = Math.cos(lonCenter), slon = Math.sin(lonCenter);
 
-  // 北向单位切线（纬度增大方向）
-  const nx = -slat * slon;
+  // 北向单位切线（纬度增大方向）— 匹配 Three.js 球体坐标
+  const nx = -slat * clon;
   const ny = clat;
-  const nz = -slat * clon;
+  const nz = slat * slon;
 
   // 东向单位切线（经度增大方向）
-  const ex = clon;
-  const ez = -slon;
+  const ex = -slon;
+  const ez = -clon;
 
   // 切平面内的方向向量
   const cosT = Math.cos(theta), sinT = Math.sin(theta);
@@ -44,15 +44,16 @@ function geodesicCirclePoint(latCenter, lonCenter, theta, radius) {
   const dz = cosT * nz + sinT * ez;
 
   // P = cos(r)·C + sin(r)·D，结果自动在单位球面上
+  // 球面坐标约定：x=cos(lat)*cos(lon), y=sin(lat), z=-cos(lat)*sin(lon)
   const cosR = Math.cos(radius), sinR = Math.sin(radius);
-  const x = cosR * clat * slon + sinR * dx;
+  const x = cosR * clat * clon + sinR * dx;
   const y = cosR * slat + sinR * dy;
-  const z = cosR * clat * clon + sinR * dz;
+  const z = -cosR * clat * slon + sinR * dz;
 
   return {
     x, y, z,
     lat: Math.asin(Math.max(-1, Math.min(1, y))),
-    lon: Math.atan2(x, z)
+    lon: Math.atan2(-z, x)
   };
 }
 
@@ -67,9 +68,9 @@ function createCircleGeometry(latCenter, lonCenter) {
 
   // 中心点（索引 0）
   positions.push(
-    Math.cos(latCenter) * Math.sin(lonCenter),
+    Math.cos(latCenter) * Math.cos(lonCenter),
     Math.sin(latCenter),
-    Math.cos(latCenter) * Math.cos(lonCenter)
+    -Math.cos(latCenter) * Math.sin(lonCenter)
   );
   latitudes.push(latCenter);
   longitudes.push(lonCenter);
@@ -145,9 +146,9 @@ function createSplitCircleGeometries(latCenter) {
 
     // 中心点
     positions.push(
-      Math.cos(latCenter) * Math.sin(centerLon),
+      Math.cos(latCenter) * Math.cos(centerLon),
       Math.sin(latCenter),
-      Math.cos(latCenter) * Math.cos(centerLon)
+      -Math.cos(latCenter) * Math.sin(centerLon)
     );
     lats.push(latCenter);
     lons.push(centerLon);

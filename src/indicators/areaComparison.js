@@ -116,9 +116,9 @@ function createPolygonGeometries(coords) {
     const latRad = latDeg * DEG2RAD;
     const lonRad = lonDeg * DEG2RAD;
     positions.push(
-      Math.cos(latRad) * Math.sin(lonRad),
+      Math.cos(latRad) * Math.cos(lonRad),
       Math.sin(latRad),
-      Math.cos(latRad) * Math.cos(lonRad)
+      -Math.cos(latRad) * Math.sin(lonRad)
     );
     latitudes.push(latRad);
     longitudes.push(lonRad);
@@ -140,9 +140,9 @@ function createPolygonGeometries(coords) {
     const latRad = lat * DEG2RAD;
     const lonRad = lon * DEG2RAD;
     linePositions.push(
-      Math.cos(latRad) * Math.sin(lonRad),
+      Math.cos(latRad) * Math.cos(lonRad),
       Math.sin(latRad),
-      Math.cos(latRad) * Math.cos(lonRad)
+      -Math.cos(latRad) * Math.sin(lonRad)
     );
     lineLatitudes.push(latRad);
     lineLongitudes.push(lonRad);
