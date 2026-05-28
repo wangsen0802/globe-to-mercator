@@ -36,8 +36,10 @@ vec3 projectConic(float lon, float lat, float stdLat) {
   float tanStd = max(tan(PI / 4.0 + stdLat / 2.0), 0.001);
   float F = cos(stdLat) * pow(tanStd, n) / max(n, 0.01);
 
-  // 限制纬度避免极点处无穷大
-  float clampedLat = clamp(lat, -1.3, 1.3);
+  // 纬度裁剪：控制扇形展开范围
+  //   下限 -1.3（74.5°S）→ 扇尾（南极方向），ρ 发散故需裁剪
+  //   上限 1.56（89.4°N）→ 扇心（北极方向），ρ→0 收敛到锥顶
+  float clampedLat = clamp(lat, -1.3, 1.56);
   float tanLat = max(tan(PI / 4.0 + clampedLat / 2.0), 0.001);
   float rho = F / pow(tanLat, n);
 

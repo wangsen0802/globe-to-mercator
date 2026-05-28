@@ -3,13 +3,17 @@
  *
  * 用法：在 .vert/.frag 文件中写  #include common/projections.glsl
  * 插件在 load 阶段将其替换为对应文件的内容，兼容 ?raw 导入。
+ * 支持 HMR：修改 .glsl 共享文件时，自动刷新所有依赖它的着色器。
  */
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 
 const INCLUDE_RE = /^[ \t]*#include[ \t]+(.+?)[ \t]*$/gm;
 
-function expandIncludes(source, baseDir) {
+// 依赖图：被 include 的文件绝对路径 → 依赖它的文件绝对路径集合
+const includeDeps = new Map();
+
+function expandIncludes(source, baseDir, importerPath) {
   const resolved = new Set();
   return source.replace(INCLUDE_RE, (_, incPath) => {
     const cleanPath = incPath.replace(/['"]/g, '');
@@ -17,8 +21,15 @@ function expandIncludes(source, baseDir) {
     resolved.add(cleanPath);
 
     const absPath = resolve(baseDir, cleanPath);
+
+    // 记录依赖：absPath 被 importerPath 引用
+    if (!includeDeps.has(absPath)) {
+      includeDeps.set(absPath, new Set());
+    }
+    includeDeps.get(absPath).add(importerPath);
+
     const content = readFileSync(absPath, 'utf-8');
-    return expandIncludes(content, dirname(absPath));
+    return expandIncludes(content, dirname(absPath), importerPath);
   });
 }
 
@@ -33,10 +44,30 @@ export default function glslInclude() {
       if (!/\.(vert|frag|glsl)$/.test(cleanId)) return null;
 
       const source = readFileSync(cleanId, 'utf-8');
-      const expanded = expandIncludes(source, dirname(cleanId));
+      const expanded = expandIncludes(source, dirname(cleanId), cleanId);
 
       // 模拟 Vite ?raw 行为：返回 JS 模块导出字符串
       return `export default ${JSON.stringify(expanded)}`;
+    },
+
+    // HMR：当 .glsl 共享文件变更时，失效所有依赖它的着色器模块
+    handleHotUpdate({ file, server }) {
+      if (!/\.(vert|frag|glsl)$/.test(file)) return;
+
+      const dependents = includeDeps.get(file);
+      if (!dependents || dependents.size === 0) return;
+
+      const mods = [];
+      for (const depPath of dependents) {
+        const depMods = server.moduleGraph.getModulesByFile(depPath);
+        if (depMods) {
+          for (const mod of depMods) {
+            server.moduleGraph.invalidateModule(mod);
+            mods.push(mod);
+          }
+        }
+      }
+      return mods.length > 0 ? mods : undefined;
     }
   };
 }
