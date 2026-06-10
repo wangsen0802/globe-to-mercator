@@ -33,9 +33,12 @@ Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
 
 // ===== 场景初始化 =====
 const container = document.getElementById('canvas-container');
+// 创建场景
 const scene = new THREE.Scene();
+// 指定场景背景色
 scene.background = new THREE.Color(0x0a0a1a);
 
+// 创建透视相机（近大远小）
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
@@ -45,18 +48,18 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 0, 4);
 
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: false
+  antialias: true, // 控制抗锯齿，启用 MSAA 多重采样，略有性能消耗
+  alpha: false     // 控制背景透明度，true 为透明，false 为不透明
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 设置像素比例，限制上限保证性能
 container.insertBefore(renderer.domElement, container.firstChild);
 
 // ===== 控制器 =====
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.enablePan = false;
+controls.enableDamping = true; // 启用缓冲
+controls.dampingFactor = 0.05; // 阻尼系数
+controls.enablePan = false; // 不允许平移
 controls.minDistance = 2;
 controls.maxDistance = 8;
 
@@ -108,21 +111,21 @@ function createGlobe(texture) {
 
 // ===== 星空背景 =====
 function createStars() {
-  const starsGeo = new THREE.BufferGeometry();
+  const starsGeometry = new THREE.BufferGeometry();
   const count = 2000;
   const positions = new Float32Array(count * 3);
 
   for (let i = 0; i < count * 3; i++) {
     positions[i] = (Math.random() - 0.5) * 50;
   }
-  starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-  const starsMat = new THREE.PointsMaterial({
+  const starsMaterial = new THREE.PointsMaterial({
     color: 0xffffff,
     size: 0.05,
     sizeAttenuation: true
   });
-  const stars = new THREE.Points(starsGeo, starsMat);
+  const stars = new THREE.Points(starsGeometry, starsMaterial);
   scene.add(stars);
   return stars;
 }
