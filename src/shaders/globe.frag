@@ -73,17 +73,43 @@ void main() {
 
   // ===== 网格线（经纬线） =====
   if (uShowGrid > 0.5) {
-    float lonLines = abs(sin(u * PI * 12.0));
-    float latLines = abs(sin(v * PI * 6.0));
-
-    float gridLine = 1.0;
-    float lineWidth = 0.01;
-    if (lonLines < lineWidth) gridLine = 0.0;
-    if (latLines < lineWidth) gridLine = 0.0;
-
-    // 球形时也显示经纬线（基础值 0.15），过渡时额外增强
+    // 球形时基础可见，过渡中增强
     float gridAlpha = 0.5 + sin(uProgress * PI) * 0.3;
-    color = mix(color, vec3(0.3, 0.7, 1.0), (1.0 - gridLine) * gridAlpha);
+
+    // --- 常规经线（每 30°，12 条主线） ---
+    float lonLine = 1.0 - smoothstep(0.005, 0.012, abs(sin(u * PI * 12.0)));
+    color = mix(color, vec3(0.3, 0.7, 1.0), lonLine * gridAlpha * 0.5);
+
+    // --- 常规纬线（每 30°，作为参考网格） ---
+    float latLine = 1.0 - smoothstep(0.005, 0.012, abs(sin(v * PI * 6.0)));
+    color = mix(color, vec3(0.3, 0.7, 1.0), latLine * gridAlpha * 0.35);
+
+    // --- 特殊纬度线（统一宽度，彩色区分） ---
+    // v 坐标与纬度映射：v = lat_deg / 180 + 0.5
+    float hw = 0.001;  // 统一半宽
+
+    // 赤道 0°：亮白色
+    float eqLine = 1.0 - smoothstep(hw * 0.4, hw, abs(v - 0.5));
+    color = mix(color, vec3(1.0, 1.0, 0.9), eqLine * gridAlpha);
+
+    // 北回归线 23.44°N & 南回归线 23.44°S：暖黄橙色，虚线
+    float vTN = 0.5 + 23.4367 / 180.0;
+    float vTS = 0.5 - 23.4367 / 180.0;
+    float tropicLine = max(
+      1.0 - smoothstep(hw * 0.4, hw, abs(v - vTN)),
+      1.0 - smoothstep(hw * 0.4, hw, abs(v - vTS))
+    );
+    float dash = step(0.4, fract(u * 36.0));  // 虚线：36 段，60% 实线
+    color = mix(color, vec3(1.0, 0.78, 0.15), tropicLine * dash * gridAlpha);
+
+    // 北极圈 66.56°N & 南极圈 66.56°S：冷蓝紫色
+    float vAN = 0.5 + 66.5633 / 180.0;
+    float vAS = 0.5 - 66.5633 / 180.0;
+    float arcticLine = max(
+      1.0 - smoothstep(hw * 0.4, hw, abs(v - vAN)),
+      1.0 - smoothstep(hw * 0.4, hw, abs(v - vAS))
+    );
+    color = mix(color, vec3(0.5, 0.65, 1.0), arcticLine * gridAlpha);
   }
 
   // ===== 过渡中的能量线条 =====
