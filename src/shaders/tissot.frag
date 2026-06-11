@@ -3,8 +3,13 @@
 
 varying float vDistortion;
 varying float vLocalProgress;
+varying vec3 vWorldPos;
+varying vec3 vSurfaceNormal;
 
 void main() {
+  // 背面剔除：法线背向相机时丢弃（球面状态下隐藏背面指标）
+  vec3 viewDir = normalize(cameraPosition - vWorldPos);
+  if (dot(vSurfaceNormal, viewDir) < 0.0) discard;
   // 变形程度梯度着色
   vec3 green  = vec3(0.30, 0.92, 0.40);
   vec3 yellow = vec3(1.00, 0.90, 0.20);

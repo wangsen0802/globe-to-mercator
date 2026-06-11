@@ -83,6 +83,32 @@ const COUNTRY_DATA = [
 ];
 
 /**
+ * 细分多边形边：将超过 maxDeg 的边拆为多段，让三角化产生更小的三角形
+ * @param {number[][]} openCoords - 未闭合的 [[lon, lat], ...] 度数
+ * @param {number} maxDeg - 最大边长（度）
+ * @returns {number[][]} 细分后的坐标数组（未闭合）
+ */
+function subdivideCoords(openCoords, maxDeg = 2) {
+  const result = [];
+  for (let i = 0; i < openCoords.length; i++) {
+    const [lon1, lat1] = openCoords[i];
+    const [lon2, lat2] = openCoords[(i + 1) % openCoords.length];
+
+    const dist = Math.sqrt((lon2 - lon1) ** 2 + (lat2 - lat1) ** 2);
+    const steps = Math.max(1, Math.ceil(dist / maxDeg));
+
+    for (let j = 0; j < steps; j++) {
+      const t = j / steps;
+      result.push([
+        lon1 + (lon2 - lon1) * t,
+        lat1 + (lat2 - lat1) * t
+      ]);
+    }
+  }
+  return result;
+}
+
+/**
  * 将 [lon, lat] 坐标数组转换为球面 BufferGeometry
  * @param {number[][]} coords - [[lon, lat], ...] 度数（首尾闭合）
  * @returns {{ fillGeo: THREE.BufferGeometry, lineGeo: THREE.BufferGeometry }}
@@ -94,25 +120,66 @@ function createPolygonGeometries(coords) {
     coords[0][1] === coords[coords.length - 1][1];
   const open = isClosed ? coords.slice(0, -1) : coords;
 
-  // 用 THREE.Shape + ShapeGeometry 实现耳切三角化（避免扇形三角化的辐射状拓扑）
+  // 细分边：将长边拆为 ≤2° 的小段，让三角化产生更密的三角形
+  const fine = subdivideCoords(open, 2);
+
+  // 用 THREE.Shape + ShapeGeometry 实现耳切三角化
   const shape = new THREE.Shape();
-  shape.moveTo(open[0][0], open[0][1]);
-  for (let i = 1; i < open.length; i++) {
-    shape.lineTo(open[i][0], open[i][1]);
+  shape.moveTo(fine[0][0], fine[0][1]);
+  for (let i = 1; i < fine.length; i++) {
+    shape.lineTo(fine[i][0], fine[i][1]);
   }
 
   const tmpGeo = new THREE.ShapeGeometry(shape);
-  const tmpPos = tmpGeo.getAttribute('position');
-  const tmpIdx = tmpGeo.getIndex();
 
-  // 将 2D (lon°, lat°) 顶点 → 3D 球面坐标 + lat/lon 属性
+  // ===== 三角形中点细分 =====
+  // 对每个三角形取三边中点，拆成 4 个小三角形，增加内部顶点密度
+  // depth=2: 每个原始三角形 → 16 个小三角形
+  // 注意：ShapeGeometry 的 position 是 3 分量 (x,y,z=0)，步长=3
+  let posArr = Array.from(tmpGeo.getAttribute('position').array);
+  let idxArr = Array.from(tmpGeo.getIndex().array);
+  tmpGeo.dispose();
+
+  for (let d = 0; d < 2; d++) {
+    const newPos = [...posArr];
+    const newIdx = [];
+    const midCache = new Map();
+
+    for (let i = 0; i < idxArr.length; i += 3) {
+      const a = idxArr[i], b = idxArr[i + 1], c = idxArr[i + 2];
+
+      // 取或创建边中点（共享边复用同一中点）
+      function mid(p1, p2) {
+        const key = p1 < p2 ? p1 * 100000 + p2 : p2 * 100000 + p1;
+        if (midCache.has(key)) return midCache.get(key);
+        const mx = (posArr[p1 * 3] + posArr[p2 * 3]) / 2;
+        const my = (posArr[p1 * 3 + 1] + posArr[p2 * 3 + 1]) / 2;
+        const idx = newPos.length / 3;
+        newPos.push(mx, my, 0);
+        midCache.set(key, idx);
+        return idx;
+      }
+
+      const mab = mid(a, b);
+      const mbc = mid(b, c);
+      const mca = mid(c, a);
+
+      // 一个三角形 → 四个
+      newIdx.push(a, mab, mca,  mab, b, mbc,  mca, mbc, c,  mab, mbc, mca);
+    }
+
+    posArr = newPos;
+    idxArr = newIdx;
+  }
+
+  // 将细分后的 2D (lon°, lat°) 顶点 → 3D 球面坐标 + lat/lon 属性
   const positions = [];
   const latitudes = [];
   const longitudes = [];
 
-  for (let i = 0; i < tmpPos.count; i++) {
-    const lonDeg = tmpPos.getX(i);
-    const latDeg = tmpPos.getY(i);
+  for (let i = 0; i < posArr.length; i += 3) {
+    const lonDeg = posArr[i];
+    const latDeg = posArr[i + 1];
     const latRad = latDeg * DEG2RAD;
     const lonRad = lonDeg * DEG2RAD;
     positions.push(
@@ -123,20 +190,19 @@ function createPolygonGeometries(coords) {
     latitudes.push(latRad);
     longitudes.push(lonRad);
   }
-  tmpGeo.dispose();
 
   const fillGeo = new THREE.BufferGeometry();
   fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   fillGeo.setAttribute('aLatitude', new THREE.Float32BufferAttribute(latitudes, 1));
   fillGeo.setAttribute('aLongitude', new THREE.Float32BufferAttribute(longitudes, 1));
-  fillGeo.setIndex(Array.from(tmpIdx.array));
+  fillGeo.setIndex(idxArr);
 
   // 轮廓线几何体（仅边界顶点，无质心）
   const linePositions = [];
   const lineLatitudes = [];
   const lineLongitudes = [];
 
-  for (const [lon, lat] of open) {
+  for (const [lon, lat] of fine) {
     const latRad = lat * DEG2RAD;
     const lonRad = lon * DEG2RAD;
     linePositions.push(

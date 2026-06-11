@@ -12,6 +12,8 @@ attribute float aLongitude;
 
 varying float vDistortion;    // 面积变形因子（1.0=无变形）
 varying float vLocalProgress; // 局部展开进度
+varying vec3 vWorldPos;       // 世界坐标（用于背面判断）
+varying vec3 vSurfaceNormal;  // 球面法线（用于背面判断）
 
 #include common/projections.glsl
 
@@ -71,4 +73,12 @@ void main() {
 
   // 微小 z 偏移，确保指标始终在地球表面之上（避免 z-fighting）
   gl_Position.z -= 0.02;
+
+  // 传递世界坐标和插值法线，供片段着色器做背面剔除
+  vWorldPos = (modelMatrix * vec4(finalPos, 1.0)).xyz;
+  // 法线从球面到平面插值，变换到世界空间（w=0 只取旋转部分）
+  vec3 sphereNormal = normalize(spherePos);
+  vec3 flatNormal = vec3(0.0, 0.0, 1.0);
+  vec3 interpNormal = normalize(mix(sphereNormal, flatNormal, localProgress));
+  vSurfaceNormal = normalize((modelMatrix * vec4(interpNormal, 0.0)).xyz);
 }
