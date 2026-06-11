@@ -62,12 +62,12 @@ void main() {
   float diff4 = max(dot(surfNormal, lightDir4), 0.0);
 
   // 提高环境光基底 + 多光源漫反射叠加
-  vec3 ambient = texColor.rgb * 0.45;
+  vec3 ambient = texColor.rgb * 0.55;
   vec3 diffuse = texColor.rgb * (
-    diff1 * 0.45 +   // 主光源
-    diff2 * 0.30 +   // 补光2
-    diff3 * 0.20 +   // 补光3
-    diff4 * 0.15     // 补光4
+    diff1 * 0.55 +   // 主光源
+    diff2 * 0.35 +   // 补光2
+    diff3 * 0.25 +   // 补光3
+    diff4 * 0.20     // 补光4
   );
   vec3 color = ambient + diffuse;
 
@@ -90,6 +90,9 @@ void main() {
   float edgeGlow = exp(-pow((vLocalProgress - 0.5) * 4.0, 2.0));
   float transitionGlow = edgeGlow * sin(uProgress * PI) * 0.2;
   color += vec3(0.5, 0.8, 1.0) * transitionGlow;
+
+  // Gamma 校正：线性空间 → sRGB 输出（匹配显示器响应曲线）
+  color = pow(color, vec3(1.0 / 2.2));
 
   gl_FragColor = vec4(color, 1.0);
 }
