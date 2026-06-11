@@ -1,6 +1,8 @@
 uniform sampler2D uTexture;
+uniform sampler2D uNormalMap;
 uniform float uProgress;
 uniform float uShowGrid;
+uniform float uNormalStrength;  // 法线贴图强度 0~1
 uniform vec3 uLightDir;
 uniform vec3 uLightDir2;
 uniform vec3 uLightDir3;
@@ -11,6 +13,8 @@ varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
 varying float vRawUv;  // 原始 uv.x，线性经度下直接用作纹理 u 坐标
+varying vec3 vTangent;
+varying vec3 vBitangent;
 
 #define PI 3.14159265359
 
@@ -22,19 +26,40 @@ void main() {
 
   vec4 texColor = texture2D(uTexture, vec2(u, v));
 
+  // ===== 法线贴图：地形凹凸细节 =====
+  // 从法线贴图采样，解码为切线空间法线 [-1, 1]
+  vec3 normalMapValue = texture2D(uNormalMap, vec2(u, v)).xyz;
+  vec3 tangentNormal = normalMapValue * 2.0 - 1.0;
+  // 放大法线扰动，增强凹凸效果
+  tangentNormal.xy *= 10.0;
+  tangentNormal = normalize(tangentNormal);
+
+  // 构建 TBN 矩阵，将切线空间法线变换到世界空间
+  vec3 T = normalize(vTangent);
+  vec3 B = normalize(vBitangent);
+  vec3 N = normalize(vNormal);
+  // 正交化：确保 TBN 互相垂直
+  T = normalize(T - dot(T, N) * N);
+  B = cross(N, T);
+
+  vec3 perturbedNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
+
+  // 用强度参数混合：0 = 纯顶点法线，1 = 完全法线贴图
+  vec3 surfNormal = normalize(mix(N, perturbedNormal, uNormalStrength));
+
   // ===== 多光源光照 =====
   // 主光源：右上方（最强）
   vec3 lightDir1 = normalize(uLightDir);
-  float diff1 = max(dot(vNormal, lightDir1), 0.0);
+  float diff1 = max(dot(surfNormal, lightDir1), 0.0);
   // 补光2：左下方（中等强度，填充暗部）
   vec3 lightDir2 = normalize(uLightDir2);
-  float diff2 = max(dot(vNormal, lightDir2), 0.0);
+  float diff2 = max(dot(surfNormal, lightDir2), 0.0);
   // 补光3：正前方（弱，整体提亮）
   vec3 lightDir3 = normalize(uLightDir3);
-  float diff3 = max(dot(vNormal, lightDir3), 0.0);
+  float diff3 = max(dot(surfNormal, lightDir3), 0.0);
   // 补光4：右下方（微弱，增加立体感）
   vec3 lightDir4 = normalize(uLightDir4);
-  float diff4 = max(dot(vNormal, lightDir4), 0.0);
+  float diff4 = max(dot(surfNormal, lightDir4), 0.0);
 
   // 提高环境光基底 + 多光源漫反射叠加
   vec3 ambient = texColor.rgb * 0.45;

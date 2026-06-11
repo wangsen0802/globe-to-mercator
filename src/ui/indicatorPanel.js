@@ -62,6 +62,14 @@ export function initIndicatorPanel(opts) {
   distSection.appendChild(routeDetail);
 
   panelEl.appendChild(distSection);
+
+  // ===== 显示增强 =====
+  const enhanceSection = el('div', 'ind-section');
+  enhanceSection.appendChild(el('div', 'ind-section-label', '显示增强'));
+
+  enhanceSection.appendChild(createToggle('toggle-normal', '地形光影', true, (v) => opts.onNormalToggle(v)));
+
+  panelEl.appendChild(enhanceSection);
 }
 
 // 创建 toggle 开关行

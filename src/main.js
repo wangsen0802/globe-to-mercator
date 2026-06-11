@@ -9,6 +9,7 @@ import { createTissotIndicators } from './indicators/tissot.js';
 import { createAreaComparison } from './indicators/areaComparison.js';
 import { createGreatCircleRoutes } from './indicators/greatCircleRoutes.js';
 import { initIndicatorPanel } from './ui/indicatorPanel.js';
+import { getAllTextures, getDefaultTextureId } from './textures/index.js';
 
 // ===== 全局状态 =====
 let progress = 0;
@@ -65,15 +66,17 @@ controls.maxDistance = 8;
 
 // ===== 加载纹理 =====
 const textureLoader = new THREE.TextureLoader();
-const EARTH_TEXTURE_URL = './assets/earth-blue-marble.jpg';
+
+// 纹理注册表
+const allTextures = getAllTextures();
+const defaultTexId = getDefaultTextureId();
+
+// 纹理缓存：{ id: THREE.Texture }
+const textureCache = {};
+let currentTextureId = defaultTexId;
 
 function createGlobe(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
-  // 关键：允许纹理在水平方向无缝环绕，消除经度 0°/360° 接缝
-  // texture.wrapS = THREE.RepeatWrapping;
-  // 关闭 mipmap 避免 seam 处降级采样产生黑线
-  // texture.generateMipmaps = false;
-  // texture.minFilter = THREE.LinearFilter;
 
   const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
 
@@ -85,7 +88,9 @@ function createGlobe(texture) {
     uConicStdLat: sharedUniforms.uConicStdLat,
     uAzimuthalType: sharedUniforms.uAzimuthalType,
     uTexture: { value: texture },
+    uNormalMap: { value: normalMapTexture },
     uShowGrid: { value: showGrid ? 1.0 : 0.0 },
+    uNormalStrength: { value: 1.0 },
     uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
     uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() },
     uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },
@@ -97,16 +102,54 @@ function createGlobe(texture) {
     fragmentShader,
     uniforms,
     side: THREE.DoubleSide
-    // side: THREE.FrontSide
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  // 旋转球体使本初子午线（longitude 0°）面向相机（+z 方向）
-  // 线性参数化下 longitude 0° 在球面右侧 (+x)，需旋转 -90° 到前方 (+z)
-  // mesh.rotation.y = -Math.PI / 2;
   scene.add(mesh);
 
   return { mesh, material };
+}
+
+// 切换地球纹理（异步加载 + 实时替换 uTexture uniform）
+function switchTexture(id) {
+  if (id === currentTextureId) return;
+
+  // 缓存命中则直接切换
+  const cached = textureCache[id];
+  if (cached) {
+    applyTexture(id, cached);
+    return;
+  }
+
+  // 查找纹理 URL
+  const texEntry = allTextures.find(t => t.id === id);
+  if (!texEntry) return;
+
+  // 显示加载状态
+  const btn = document.querySelector(`.tex-btn[data-tex-id="${id}"]`);
+  if (btn) btn.classList.add('loading');
+
+  textureLoader.load(texEntry.url, (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    textureCache[id] = texture;
+    if (btn) btn.classList.remove('loading');
+    applyTexture(id, texture);
+  }, undefined, (err) => {
+    console.warn(`纹理 ${id} 加载失败`, err);
+    if (btn) btn.classList.remove('loading');
+  });
+}
+
+// 应用纹理到地球
+function applyTexture(id, texture) {
+  if (globe) {
+    globe.material.uniforms.uTexture.value = texture;
+    texture.needsUpdate = true;
+  }
+  currentTextureId = id;
+  document.querySelectorAll('.tex-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.texId === id);
+  });
 }
 
 // ===== 星空背景 =====
@@ -147,43 +190,114 @@ const stars = createStars();
 let globe = null;
 let showGrid = true;  // 缓存经纬线开关状态，globe 异步加载后读取
 
-textureLoader.load(EARTH_TEXTURE_URL, (texture) => {
-  globe = createGlobe(texture);
-  console.log('地球纹理加载完成');
+// 法线贴图（全局共用，不随颜色纹理切换）
+let normalMapTexture = null;
+
+// 创建 1×1 平坦法线 fallback（RGB = [0.5, 0.5, 1.0] = 指向上方的法线）
+// 防止 uNormalMap 为 null 时 GLSL texture2D() 行为未定义
+const flatNormalCanvas = document.createElement('canvas');
+flatNormalCanvas.width = 1;
+flatNormalCanvas.height = 1;
+flatNormalCanvas.getContext('2d').fillStyle = 'rgb(128,128,255)';
+flatNormalCanvas.getContext('2d').fillRect(0, 0, 1, 1);
+const flatNormalTexture = new THREE.CanvasTexture(flatNormalCanvas);
+normalMapTexture = flatNormalTexture;
+
+// 并行加载法线贴图 + 默认颜色纹理
+const NORMAL_MAP_URL = './assets/2k_earth_normal_map.jpg';
+const defaultTex = allTextures.find(t => t.id === defaultTexId);
+
+let pendingLoads = 2;
+function onResourceReady() {
+  pendingLoads--;
+  if (pendingLoads === 0) {
+    globe = createGlobe(textureCache[defaultTexId]);
+    console.log('地球纹理 + 法线贴图加载完成');
+    initTextureSwitcher();
+  }
+}
+
+// 加载法线贴图
+textureLoader.load(NORMAL_MAP_URL, (tex) => {
+  normalMapTexture = tex;
+  onResourceReady();
 }, undefined, (err) => {
-  console.warn('纹理加载失败，使用备用纹理', err);
+  console.warn('法线贴图加载失败，将使用平坦法线 fallback', err);
+  onResourceReady();
+});
+
+// 加载默认颜色纹理
+textureLoader.load(defaultTex.url, (texture) => {
+  textureCache[defaultTexId] = texture;
+  onResourceReady();
+}, undefined, (err) => {
+  console.warn('默认纹理加载失败，尝试备用纹理', err);
+  const fallback = allTextures.find(t => t.id === 'daymap');
+  if (fallback) {
+    textureLoader.load(fallback.url, (fbTexture) => {
+      textureCache['daymap'] = fbTexture;
+      currentTextureId = 'daymap';
+      onResourceReady();
+    }, undefined, () => {
+      console.error('备用纹理也加载失败，使用 Canvas fallback');
+      createCanvasFallback();
+      onResourceReady();
+    });
+  } else {
+    createCanvasFallback();
+    onResourceReady();
+  }
+});
+
+// Canvas 渐变纹理作为最终 fallback
+function createCanvasFallback() {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
-
   const gradient = ctx.createLinearGradient(0, 0, 0, 512);
   gradient.addColorStop(0, '#1a3a5c');
-  gradient.addColorStop(0.2, '#2d6a4f');
+  gradient.addColorStop(0.3, '#2d6a4f');
   gradient.addColorStop(0.5, '#40916c');
-  gradient.addColorStop(0.8, '#2d6a4f');
+  gradient.addColorStop(0.7, '#2d6a4f');
   gradient.addColorStop(1, '#1a3a5c');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1024, 512);
-
-  // 复制最左列到最右列，使 canvas 边缘颜色一致，消除 fallback 接缝
-  const leftEdge = ctx.getImageData(0, 0, 1, 512);
-  ctx.putImageData(leftEdge, 1023, 0);
-
-  ctx.fillStyle = '#52796f';
-  for (let i = 0; i < 30; i++) {
-    const x = Math.random() * 1024;
-    const y = 100 + Math.random() * 312;
-    const w = 30 + Math.random() * 100;
-    const h = 20 + Math.random() * 60;
-    ctx.beginPath();
-    ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   const fallbackTexture = new THREE.CanvasTexture(canvas);
-  globe = createGlobe(fallbackTexture);
-});
+  fallbackTexture.colorSpace = THREE.SRGBColorSpace;
+  textureCache['canvas-fallback'] = fallbackTexture;
+  currentTextureId = 'canvas-fallback';
+}
+
+// ===== 纹理切换 UI =====
+function initTextureSwitcher() {
+  const texContainer = document.getElementById('texture-switcher');
+  if (!texContainer) return;
+
+  allTextures.forEach(tex => {
+    const btn = document.createElement('button');
+    btn.className = 'tex-btn' + (tex.id === currentTextureId ? ' active' : '');
+    btn.dataset.texId = tex.id;
+    btn.title = tex.name;
+
+    // 缩略图
+    const img = document.createElement('img');
+    img.src = tex.thumbUrl;
+    img.alt = tex.name;
+    img.className = 'tex-thumb';
+    img.loading = 'lazy';
+
+    // 名称
+    const label = document.createElement('span');
+    label.className = 'tex-label';
+    label.textContent = tex.name;
+
+    btn.appendChild(img);
+    btn.appendChild(label);
+    btn.addEventListener('click', () => switchTexture(tex.id));
+    texContainer.appendChild(btn);
+  });
+}
 
 // ===== 投影切换按钮（动态生成） =====
 const btnGroup = document.querySelector('.proj-btn-group');
@@ -241,6 +355,9 @@ initIndicatorPanel({
   onGridToggle: (visible) => {
     showGrid = visible;
     if (globe) globe.material.uniforms.uShowGrid.value = visible ? 1.0 : 0.0;
+  },
+  onNormalToggle: (visible) => {
+    if (globe) globe.material.uniforms.uNormalStrength.value = visible ? 1.0 : 0.0;
   }
 });
 

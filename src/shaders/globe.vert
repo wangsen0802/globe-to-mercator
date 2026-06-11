@@ -13,6 +13,8 @@ varying vec3 vWorldPos;
 varying float vLocalProgress;
 varying float vLatitude;
 varying float vRawUv;  // 原始 uv.x，线性经度参数化下直接作为纹理 u 坐标
+varying vec3 vTangent;   // 切线（用于法线贴图 TBN 变换）
+varying vec3 vBitangent; // 副切线
 
 #include common/projections.glsl
 
@@ -62,6 +64,30 @@ void main() {
   vec3 finalNormal = normalize(mix(sphereNormal, flatNormal, localProgress));
 
   vNormal = normalize(normalMatrix * finalNormal);
+
+  // ===== 切线空间基向量（法线贴图用） =====
+  // 球面切线：沿经度方向（dPos/dLon），副切线沿纬度方向（dPos/dLat）
+  float cosLat = cos(latitude);
+  float sinLat = sin(latitude);
+  float cosLon = cos(longitude);
+  float sinLon = sin(longitude);
+
+  // 球面切线：经度方向偏导 ∂Pos/∂lon = (-sinLon * cosLat, 0, -cosLon * cosLat)
+  vec3 sphereTangent = normalize(vec3(-sinLon * cosLat, 0.0, -cosLon * cosLat));
+  // 球面副切线：纬度方向偏导 ∂Pos/∂lat = (-cosLon * sinLat, cosLat, sinLon * sinLat)
+  vec3 sphereBitangent = normalize(vec3(-cosLon * sinLat, cosLat, sinLon * sinLat));
+
+  // 平面切线/副切线
+  vec3 flatTangent = vec3(1.0, 0.0, 0.0);
+  vec3 flatBitangent = vec3(0.0, 1.0, 0.0);
+
+  // 跟法线一样在球面和平面之间插值
+  vec3 finalTangent = normalize(mix(sphereTangent, flatTangent, localProgress));
+  vec3 finalBitangent = normalize(mix(sphereBitangent, flatBitangent, localProgress));
+
+  vTangent = normalize(normalMatrix * finalTangent);
+  vBitangent = normalize(normalMatrix * finalBitangent);
+
   vWorldPos = (modelMatrix * vec4(finalPos, 1.0)).xyz;
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);

@@ -369,6 +369,63 @@
       color: rgba(255, 255, 255, 0.4);
       margin-bottom: 4px;
     }
+
+    /* ===== 纹理切换器 ===== */
+    #texture-switcher {
+      position: absolute;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
+      padding: 5px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 10;
+    }
+
+    .tex-btn {
+      background: transparent;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: all 0.25s ease;
+    }
+
+    .tex-btn:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .tex-btn.active {
+      border-color: rgba(74, 222, 128, 0.7);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .tex-thumb {
+      border-radius: 3px;
+      display: block;
+      width: 48px;
+      height: 24px;
+      object-fit: cover;
+    }
+
+    .tex-label {
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.4);
+      white-space: nowrap;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .tex-btn.active .tex-label {
+      color: rgba(255, 255, 255, 0.85);
+    }
   </style>
 </head>
 <body>
@@ -376,6 +433,7 @@
     <div class="proj-btn-group"></div>
     <div id="info-panel"></div>
     <div id="indicator-panel"></div>
+    <div id="texture-switcher"></div>
     <div id="controls">
       <label>球体</label>
       <input type="range" id="progress-slider" min="0" max="100" value="0" />
