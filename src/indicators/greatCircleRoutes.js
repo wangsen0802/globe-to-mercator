@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import indicatorVert from '../shaders/indicator.vert?raw';
 import routeFrag from '../shaders/route.frag?raw';
-
-const PI = Math.PI;
-const DEG2RAD = PI / 180;
+import { PI, DEG2RAD } from '../utils/math.js';
 
 const ROUTES = [
   { from: { name: '伦敦', lat: 51.5, lon: 0 }, to: { name: '纽约', lat: 40.7, lon: -74 } },

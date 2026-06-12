@@ -3,6 +3,7 @@ uniform sampler2D uNormalMap;
 uniform float uProgress;
 uniform float uShowGrid;
 uniform float uNormalStrength;  // 法线贴图强度 0~1
+uniform float uNormalBumpScale; // 法线扰动放大因子（原硬编码 10.0，提取为 uniform 便于调参）
 uniform vec3 uLightDir;
 uniform vec3 uLightDir2;
 uniform vec3 uLightDir3;
@@ -30,8 +31,8 @@ void main() {
   // 从法线贴图采样，解码为切线空间法线 [-1, 1]
   vec3 normalMapValue = texture2D(uNormalMap, vec2(u, v)).xyz;
   vec3 tangentNormal = normalMapValue * 2.0 - 1.0;
-  // 放大法线扰动，增强凹凸效果
-  tangentNormal.xy *= 10.0;
+  // 放大法线扰动，增强凹凸效果（强度由 uNormalBumpScale 控制，默认 10.0）
+  tangentNormal.xy *= uNormalBumpScale;
   tangentNormal = normalize(tangentNormal);
 
   // 构建 TBN 矩阵，将切线空间法线变换到世界空间

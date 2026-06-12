@@ -10,6 +10,7 @@ import { createAreaComparison } from './indicators/areaComparison.js';
 import { createGreatCircleRoutes } from './indicators/greatCircleRoutes.js';
 import { initIndicatorPanel } from './ui/indicatorPanel.js';
 import { getAllTextures, getDefaultTextureId } from './textures/index.js';
+import { CONIC_STD_LAT_DEFAULT } from './utils/math.js';
 
 // ===== 全局状态 =====
 let progress = 0;
@@ -23,7 +24,7 @@ const sharedUniforms = {
   uProgress: { value: 0.0 },
   uSpreadDelay: { value: SPREAD_DELAY },
   uProjectionID: { value: currentProjection.id },
-  uConicStdLat: { value: 0.5236 },
+  uConicStdLat: { value: CONIC_STD_LAT_DEFAULT },
   uAzimuthalType: { value: 0.0 }
 };
 
@@ -75,7 +76,7 @@ const defaultTexId = getDefaultTextureId();
 const textureCache = {};
 let currentTextureId = defaultTexId;
 
-function createGlobe(texture) {
+function createGlobe(texture, normalMap) {
   texture.colorSpace = THREE.SRGBColorSpace;
 
   const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
@@ -88,9 +89,10 @@ function createGlobe(texture) {
     uConicStdLat: sharedUniforms.uConicStdLat,
     uAzimuthalType: sharedUniforms.uAzimuthalType,
     uTexture: { value: texture },
-    uNormalMap: { value: normalMapTexture },
+    uNormalMap: { value: normalMap },
     uShowGrid: { value: showGrid ? 1.0 : 0.0 },
     uNormalStrength: { value: 1.0 },
+    uNormalBumpScale: { value: 10.0 },
     uLightDir: { value: new THREE.Vector3(1, 0.5, 1).normalize() },
     uLightDir2: { value: new THREE.Vector3(-0.8, -0.3, 0.6).normalize() },
     uLightDir3: { value: new THREE.Vector3(0, 0, 1).normalize() },
@@ -152,8 +154,9 @@ function switchTexture(id) {
 // 应用纹理到地球
 function applyTexture(id, texture) {
   if (globe) {
+    // 直接替换 uniform value 即可：TextureLoader 加载完成的纹理首次使用时
+    // 由 Three.js 自动上传 GPU，无需手动 needsUpdate（设 true 反而触发多余重传）
     globe.material.uniforms.uTexture.value = texture;
-    texture.needsUpdate = true;
   }
   currentTextureId = id;
   document.querySelectorAll('.tex-btn').forEach(btn => {
@@ -199,9 +202,6 @@ const stars = createStars();
 let globe = null;
 let showGrid = true;  // 缓存经纬线开关状态，globe 异步加载后读取
 
-// 法线贴图（全局共用，不随颜色纹理切换）
-let normalMapTexture = null;
-
 // 创建 1×1 平坦法线 fallback（RGB = [0.5, 0.5, 1.0] = 指向上方的法线）
 // 防止 uNormalMap 为 null 时 GLSL texture2D() 行为未定义
 const flatNormalCanvas = document.createElement('canvas');
@@ -210,56 +210,57 @@ flatNormalCanvas.height = 1;
 flatNormalCanvas.getContext('2d').fillStyle = 'rgb(128,128,255)';
 flatNormalCanvas.getContext('2d').fillRect(0, 0, 1, 1);
 const flatNormalTexture = new THREE.CanvasTexture(flatNormalCanvas);
-normalMapTexture = flatNormalTexture;
 
-// 并行加载法线贴图 + 默认颜色纹理
+// ===== 并行加载法线贴图 + 默认颜色纹理，两者完成后创建地球 =====
 const NORMAL_MAP_URL = './assets/2k_earth_normal_map.jpg';
 const defaultTex = allTextures.find(t => t.id === defaultTexId);
 
-let pendingLoads = 2;
-function onResourceReady() {
-  pendingLoads--;
-  if (pendingLoads === 0) {
-    // 用 currentTextureId 而非 defaultTexId：fallback 分支可能已把实际可用纹理
-    // 写到 'daymap' 或 'canvas-fallback' 键（defaultTexId='blue-marble' 此时未写入缓存）
-    const readyTex = textureCache[currentTextureId];
-    if (!readyTex) throw new Error(`初始化失败：纹理 ${currentTextureId} 未加载，fallback 链全部失败`);
-    globe = createGlobe(readyTex);
-    console.log('地球纹理 + 法线贴图加载完成');
-    initTextureSwitcher();
+// 把 TextureLoader.load 包成 Promise
+function loadTexture(url) {
+  return new Promise((resolve, reject) => {
+    textureLoader.load(url, resolve, undefined, reject);
+  });
+}
+
+// 法线贴图：失败则回退平坦法线（全局常驻，不随颜色纹理切换）
+async function loadNormalMap() {
+  try {
+    return await loadTexture(NORMAL_MAP_URL);
+  } catch (err) {
+    console.warn('法线贴图加载失败，将使用平坦法线 fallback', err);
+    return flatNormalTexture;
   }
 }
 
-// 加载法线贴图
-textureLoader.load(NORMAL_MAP_URL, (tex) => {
-  normalMapTexture = tex;
-  onResourceReady();
-}, undefined, (err) => {
-  console.warn('法线贴图加载失败，将使用平坦法线 fallback', err);
-  onResourceReady();
-});
-
-// 加载默认颜色纹理
-textureLoader.load(defaultTex.url, (texture) => {
-  textureCache[defaultTexId] = texture;
-  onResourceReady();
-}, undefined, (err) => {
-  console.warn('默认纹理加载失败，尝试备用纹理', err);
-  const fallback = allTextures.find(t => t.id === 'daymap');
-  if (fallback) {
-    textureLoader.load(fallback.url, (fbTexture) => {
-      textureCache['daymap'] = fbTexture;
-      currentTextureId = 'daymap';
-      onResourceReady();
-    }, undefined, () => {
-      console.error('备用纹理也加载失败，使用 Canvas fallback');
-      createCanvasFallback();
-      onResourceReady();
-    });
-  } else {
+// 默认颜色纹理：三级 fallback 链（默认 → daymap → Canvas 渐变）
+async function loadDefaultTexture() {
+  try {
+    const tex = await loadTexture(defaultTex.url);
+    textureCache[defaultTexId] = tex;
+    return tex;
+  } catch (err) {
+    console.warn('默认纹理加载失败，尝试备用纹理', err);
+    const fallback = allTextures.find(t => t.id === 'daymap');
+    if (fallback) {
+      try {
+        const fbTex = await loadTexture(fallback.url);
+        textureCache['daymap'] = fbTex;
+        currentTextureId = 'daymap';
+        return fbTex;
+      } catch {
+        console.error('备用纹理也加载失败，使用 Canvas fallback');
+      }
+    }
     createCanvasFallback();
-    onResourceReady();
+    return textureCache[currentTextureId];
   }
+}
+
+// 并行加载两个资源，都完成后创建地球（新增资源只需往数组加一项）
+Promise.all([loadNormalMap(), loadDefaultTexture()]).then(([normalMap, colorTexture]) => {
+  globe = createGlobe(colorTexture, normalMap);
+  console.log('地球纹理 + 法线贴图加载完成');
+  initTextureSwitcher();
 });
 
 // Canvas 渐变纹理作为最终 fallback

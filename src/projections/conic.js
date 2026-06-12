@@ -1,12 +1,14 @@
 /**
  * 圆锥投影 — Lambert 正形圆锥投影 (Lambert Conformal Conic)
  */
+import { CONIC_STD_LAT_DEFAULT } from '../utils/math.js';
+
 export const conic = {
   id: 2,
   name: '圆锥投影',
   epsg: 'Lambert Conformal Conic',
   uniforms: {
-    uConicStdLat: 0.5236  // 30°N，适合展示中国/中纬度区域
+    uConicStdLat: CONIC_STD_LAT_DEFAULT  // 30°N，适合展示中国/中纬度区域
   },
   info: {
     forwardFormula: 'n = sin(φ₁)\nρ = F / tan^n(π/4 + φ/2)\nθ = n · λ\nx = ρ · sin(θ)\ny = ρ₀ - ρ · cos(θ)',
