@@ -42,6 +42,9 @@ float computeAreaDistortion(float lat, float lon) {
 void main() {
   // position 已在球面上（由 JS 端计算）
   vec3 spherePos = position;
+  // 地球用 phiStart=-π/2 把接缝转到背面（背面切口）。指标球面位置同步旋转 -π/2（绕 Y 轴）以对齐地球，
+  // 平面投影（applyProjection，地理经度）不动 → 与地球平面态一致。旋转：(x,y,z)→(-z,y,x)。
+  spherePos = vec3(-spherePos.z, spherePos.y, spherePos.x);
 
   // 使用属性中的经纬度（而非从 position 反推，更精确）
   float latitude = aLatitude;
@@ -50,7 +53,7 @@ void main() {
   // 投影变换
   vec3 flatPos = applyProjection(longitude, latitude);
 
-  // 剥橘子动画（注：globe.vert 已改贝塞尔路径，本文件位置仍用线性 mix，Task 4 同步）
+  // 剥橘子动画（与 globe.vert 一致：球面↔平面线性 mix，纬度延迟展开）
   float normalizedLat = abs(latitude) / (PI / 2.0);
   float localDelay = normalizedLat * normalizedLat * uSpreadDelay;
   float localProgress = clamp((uProgress - localDelay) / (1.0 - uSpreadDelay + 0.001), 0.0, 1.0);

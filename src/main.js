@@ -25,8 +25,7 @@ const sharedUniforms = {
   uSpreadDelay: { value: SPREAD_DELAY },
   uProjectionID: { value: currentProjection.id },
   uConicStdLat: { value: CONIC_STD_LAT_DEFAULT },
-  uAzimuthalType: { value: 0.0 },
-  uPeelStrength: { value: 1.5 }   // 剥橘子外鼓强度（默认 1.5；最小安全强度，清扫者边界 |lon|=120° 在此刚好半径=1）
+  uAzimuthalType: { value: 0.0 }
 };
 
 // 同步初始投影参数
@@ -80,7 +79,10 @@ let currentTextureId = defaultTexId;
 function createGlobe(texture, normalMap) {
   texture.colorSpace = THREE.SRGBColorSpace;
 
-  const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS);
+  // phiStart=-π/2：把 SphereGeometry 的网格接缝（重复顶点）从默认 -x 转到 -z（背面）。
+  // 线性经度下 180° 经线落在接缝上 → 在背面干净分割（消除穿模：分割被前半球遮挡），
+  // 本初子午线相应转到 +z 正对相机。指示器坐标约定须为 lon 0°→+z（见各 indicator 文件）。
+  const geometry = new THREE.SphereGeometry(1, LON_SEGMENTS, LAT_SEGMENTS, -Math.PI / 2);
 
   // 地球 uniforms：共享投影参数 + 独有的纹理和光照
   const uniforms = {
@@ -89,7 +91,6 @@ function createGlobe(texture, normalMap) {
     uProjectionID: sharedUniforms.uProjectionID,
     uConicStdLat: sharedUniforms.uConicStdLat,
     uAzimuthalType: sharedUniforms.uAzimuthalType,
-    uPeelStrength: sharedUniforms.uPeelStrength,
     uTexture: { value: texture },
     uNormalMap: { value: normalMap },
     uShowGrid: { value: showGrid ? 1.0 : 0.0 },
@@ -359,13 +360,6 @@ const progressLabel = document.getElementById('progress-value');
 slider.addEventListener('input', (e) => {
   progress = parseInt(e.target.value) / 100;
   progressLabel.textContent = e.target.value + '%';
-});
-
-const peelSlider = document.getElementById('peel-slider');
-const peelLabel = document.getElementById('peel-value');
-peelSlider.addEventListener('input', (e) => {
-  sharedUniforms.uPeelStrength.value = parseInt(e.target.value) / 100;
-  peelLabel.textContent = (parseInt(e.target.value) / 100).toFixed(1);
 });
 
 // ===== 教育面板初始化 =====

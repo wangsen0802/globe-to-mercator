@@ -229,6 +229,8 @@ function jsApplyProjection(lon, lat, uniforms) {
 
 function computeLabelPosition(lat, lon, progress, uniforms) {
   const sphere = latLonToXYZ(lat, lon);
+  // 地球 phiStart=-π/2 背面切口：球面位置同步旋转 -π/2（绕 Y 轴，(x,y,z)→(-z,y,x)），平面投影不动
+  const rsphere = [-sphere[2], sphere[1], sphere[0]];
   const flat = jsApplyProjection(lon, lat, uniforms);
   const spreadDelay = uniforms.uSpreadDelay.value;
   const normalizedLat = Math.abs(lat) / (PI / 2);
@@ -236,9 +238,9 @@ function computeLabelPosition(lat, lon, progress, uniforms) {
   const localProgress = Math.max(0, Math.min(1, (progress - localDelay) / (1 - spreadDelay + 0.001)));
   const eased = easeInOutCubic(localProgress);
   return [
-    sphere[0] + (flat[0] - sphere[0]) * eased,
-    sphere[1] + (flat[1] - sphere[1]) * eased,
-    sphere[2] + (flat[2] - sphere[2]) * eased,
+    rsphere[0] + (flat[0] - rsphere[0]) * eased,
+    rsphere[1] + (flat[1] - rsphere[1]) * eased,
+    rsphere[2] + (flat[2] - rsphere[2]) * eased,
   ];
 }
 
