@@ -52,6 +52,8 @@ docs/                     # 学习文档：架构指南、main.js 深入解析�
 
 - **变形原理（线性经度参数化）**: 顶点着色器中经度计算从 uv 直接线性映射：`phi = uv.x * 2PI; longitude = phi - PI`，不再通过 `atan` 从 position 反推。片元着色器用 `vRawUv = uv.x` 直接采样纹理，消除纹理接缝跳变
 - **剥橘子效果**: 赤道区域先展开，两极延迟（`localDelay = normalizedLat² * uSpreadDelay`），用 easeInOutCubic 缓动
+- **背面切口（消除剥开穿模，antimeridian crossing 解法）**: `SphereGeometry(1, 360, 180, -Math.PI/2)` 的 `phiStart=-π/2` 把网格接缝（重复顶点）从默认 -x（侧面）转到 -z（背面）。线性经度下 180° 经线落在接缝上 → **在背面干净分割**（接缝两侧顶点分离为平面左右边缘），被前半球遮挡，正面剥开**不再穿模**。本初子午线相应转到 +z 正对相机（更标准的地球仪视角）。这是经典 antimeridian crossing 问题的解法（与 `greatCircleRoutes.js` 的 `splitAtDateLine` 同理）：必须在 180° 经线处有可分割的顶点，且让该分割发生在背面。曾尝试的 `atan` 经度（切口在背面但接缝不分割→平面图拉伸错乱）和贝塞尔外鼓（切口在侧面、外鼓撑开→观感怪异）均已废弃。
+- **指标 -π/2 旋转对齐**: 因 `phiStart` 把地球转了 90°，指标球面位置须同步旋转 -π/2（绕 Y，`(x,y,z)→(-z,y,x)`）以贴合地球——在 `indicator.vert`（`spherePos = vec3(-spherePos.z, spherePos.y, spherePos.x)`）和 `greatCircleRoutes.js` 的 `computeLabelPosition`（`rsphere`）各加一处。**平面投影不动**（地理经度，两端一致）。指标的 `latLonToXYZ` 仍用 lon 0°→+x 约定（见下），旋转在着色器/JS 出口处统一施加
 - **纹理来源**: 本地 `public/assets/` 目录（代码以 `./assets/` 引用，Vite 把 `public/` 映射到根路径），来源 Solar System Scope (CC BY 4.0)
 - **多纹理切换**: 4 种地球纹理（蓝色弹珠、日间、夜间、云层）实时切换，底部纹理切换栏 UI
 - **法线贴图光照**: `uNormalMap` 全局常驻，通过 TBN 矩阵将法线从切线空间变换到世界空间，增强地形凹凸光影细节。`uNormalStrength` 控制强度（0~1），左侧面板"地形光影"开关
