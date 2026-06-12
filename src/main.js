@@ -25,7 +25,8 @@ const sharedUniforms = {
   uSpreadDelay: { value: SPREAD_DELAY },
   uProjectionID: { value: currentProjection.id },
   uConicStdLat: { value: CONIC_STD_LAT_DEFAULT },
-  uAzimuthalType: { value: 0.0 }
+  uAzimuthalType: { value: 0.0 },
+  uPeelStrength: { value: 1.5 }   // 剥橘子外鼓强度（默认 1.5；最小安全强度，清扫者边界 |lon|=120° 在此刚好半径=1）
 };
 
 // 同步初始投影参数
@@ -88,6 +89,7 @@ function createGlobe(texture, normalMap) {
     uProjectionID: sharedUniforms.uProjectionID,
     uConicStdLat: sharedUniforms.uConicStdLat,
     uAzimuthalType: sharedUniforms.uAzimuthalType,
+    uPeelStrength: sharedUniforms.uPeelStrength,
     uTexture: { value: texture },
     uNormalMap: { value: normalMap },
     uShowGrid: { value: showGrid ? 1.0 : 0.0 },
@@ -357,6 +359,13 @@ const progressLabel = document.getElementById('progress-value');
 slider.addEventListener('input', (e) => {
   progress = parseInt(e.target.value) / 100;
   progressLabel.textContent = e.target.value + '%';
+});
+
+const peelSlider = document.getElementById('peel-slider');
+const peelLabel = document.getElementById('peel-value');
+peelSlider.addEventListener('input', (e) => {
+  sharedUniforms.uPeelStrength.value = parseInt(e.target.value) / 100;
+  peelLabel.textContent = (parseInt(e.target.value) / 100).toFixed(1);
 });
 
 // ===== 教育面板初始化 =====
