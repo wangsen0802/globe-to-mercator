@@ -1,26 +1,25 @@
 // 数值验证"穿透度加权外鼓贝塞尔"剥橘子路径是否消除穿模
 // 用法：node scripts/peel-verify.mjs
 //
-// 检查项（每种投影 × 每个 uPeelStrength × 两种退化分支）：
+// 检查项（每种投影 × 每个 uPeelStrength）：
 //   1. 端点精确：B(0) == P0（球面）、B(1) == P2（平面）
 //   2. 接缝"清扫者"全程在球外：|lon|>=120° 的顶点，min_t |B(t)| >= 1（防穿模核心保证）
 //   3. 赤道不自相交：lat=0 的等距 lon 折线在 peel 中段不发生非邻接段相交（原 bug 的直接检验）
 //   4. 目标在球外却钻入球：|P2|>=1 但路径半径 < 1 的顶点计数
+//   5. 正射南极 d 门控回归：南极 P0≈P2 时 dGate 把 L→0，不引入新穿模（应=0）
 //
 // 注意：缓动(easeInOutCubic)与纬度延迟只改变 slider→t 的映射，不改变每个顶点走过的路径形状，
 //       故路径形状验证直接用 t∈[0,1]，与动画时序无关。
+//       路径求值调用真实 src/utils/peel.js 的 peelPath（消除副本漂移）。
+
+import { peelPath } from '../src/utils/peel.js';
 
 const PI = Math.PI;
 const D2R = PI / 180;
 
-// ===== 向量运算（3D，数组 [x,y,z]） =====
-const vAdd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+// ===== 向量运算（3D，数组 [x,y,z]；仅保留 verifyProjection 仍用的两个） =====
 const vSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const vScale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
-const vDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const vCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const vLen = (a) => Math.hypot(a[0], a[1], a[2]);
-const vNorm = (a) => { const l = vLen(a); return l < 1e-12 ? [0, 0, 0] : [a[0] / l, a[1] / l, a[2] / l]; };
 
 // ===== 球面坐标 → 笛卡尔（与项目约定一致：lon 0° → +x） =====
 function spherePos(la, lo) {
@@ -63,48 +62,8 @@ const PROJECTIONS = {
   'azimuthal-stereo': jsAzStereo,
 };
 
-// ===== 方案 B：穿透度加权外鼓贝塞尔路径 =====
-// 返回求值函数 path(t)。fallback: 'crossDZ'（沿 cross(d,极轴)→±Z，推荐）或 'poleAxisY'（沿极轴 ±Y）
-function makePath(p0, p2, la, S, fallback) {
-  const r = vNorm(p0);          // 球面径向 = 外法线（p0 已单位化）
-  const d = vSub(p2, p0);       // 位移
-  const dPerp = vSub(d, vScale(r, vDot(d, r))); // 切向分量
-  const pen = Math.max(0, -vDot(d, r));         // 向内穿透深度
-  let liftDir;
-  if (vLen(dPerp) > 1e-3) {
-    liftDir = vNorm(dPerp);
-  } else if (fallback === 'crossDZ') {
-    const cz = vCross(d, [0, 1, 0]);
-    liftDir = vLen(cz) > 1e-3 ? vNorm(cz) : [0, la >= 0 ? 1 : -1, 0];
-  } else {
-    liftDir = [0, la >= 0 ? 1 : -1, 0];
-  }
-  const L = S * (0.6 + 0.4 * pen);
-  const C = vAdd(p0, vScale(liftDir, L));
-  return (t) => {
-    const u = 1 - t;
-    return vAdd(vAdd(vScale(p0, u * u), vScale(C, 2 * u * t)), vScale(p2, t * t));
-  };
-}
-
-// 两线段最短距离（采样近似，够用）
-function segSegDist(a, b, c, d) {
-  let m = Infinity;
-  for (let i = 0; i <= 8; i++) {
-    const t = i / 8;
-    const p = vAdd(a, vScale(vSub(b, a), t));
-    for (let j = 0; j <= 8; j++) {
-      const s = j / 8;
-      const q = vAdd(c, vScale(vSub(d, c), s));
-      m = Math.min(m, vLen(vSub(p, q)));
-    }
-  }
-  return m;
-}
-
 // ===== 采样网格 =====
 const STRENGTHS = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0];
-const FALLBACKS = ['crossDZ', 'poleAxisY'];
 const TS = [];
 for (let t = 0; t <= 1.0001; t += 0.02) TS.push(t);
 const LATS = []; for (let la = -90; la <= 90; la += 10) LATS.push(la * D2R);
@@ -115,63 +74,86 @@ function deg(rad) { return (rad * 180 / PI).toFixed(0); }
 
 function verifyProjection(name, projFn) {
   const out = { projection: name, endpointMaxErr: 0, details: [] };
-  // 端点精确性（与强度无关，用 S=1.0、crossDZ 算一次即可）
+  // 端点精确性（与强度无关，用 S=1.0 算一次即可）
   for (const la of LATS) for (const lo of LONS) {
     const p0 = spherePos(la, lo);
     const p2 = projFn(lo, la);
-    const path = makePath(p0, p2, la, 1.0, 'crossDZ');
+    const path = (t) => peelPath(p0, p2, la, lo, t, 1.0);
     out.endpointMaxErr = Math.max(out.endpointMaxErr, vLen(vSub(path(0), p0)), vLen(vSub(path(1), p2)));
   }
 
   for (const S of STRENGTHS) {
-    for (const fb of FALLBACKS) {
-      let sweeperMin = Infinity, sweeperMinV = null;
-      let globalMin = Infinity, globalMinV = null;
-      let outsidePenetrate = 0;
+    let sweeperMin = Infinity, sweeperMinV = null;
+    let globalMin = Infinity, globalMinV = null;
+    let outsidePenetrate = 0;
 
-      for (const la of LATS) for (const lo of LONS) {
-        const p0 = spherePos(la, lo);
-        const p2 = projFn(lo, la);
-        const path = makePath(p0, p2, la, S, fb);
-        let mr = Infinity;
-        for (const t of TS) mr = Math.min(mr, vLen(path(t)));
-        const vinfo = { lat: deg(la), lon: deg(lo) };
-        if (mr < globalMin) { globalMin = mr; globalMinV = vinfo; }
-        if (Math.abs(lo) >= SWEEPER_LON && mr < sweeperMin) { sweeperMin = mr; sweeperMinV = vinfo; }
-        if (vLen(p2) >= 1 && mr < 0.999) outsidePenetrate++;
-      }
+    for (const la of LATS) for (const lo of LONS) {
+      const p0 = spherePos(la, lo);
+      const p2 = projFn(lo, la);
+      const path = (t) => peelPath(p0, p2, la, lo, t, S);
+      let mr = Infinity;
+      for (const t of TS) mr = Math.min(mr, vLen(path(t)));
+      const vinfo = { lat: deg(la), lon: deg(lo) };
+      if (mr < globalMin) { globalMin = mr; globalMinV = vinfo; }
+      if (Math.abs(lo) >= SWEEPER_LON && mr < sweeperMin) { sweeperMin = mr; sweeperMinV = vinfo; }
+      if (vLen(p2) >= 1 && mr < 0.999) outsidePenetrate++;
+    }
 
-      // 赤道自相交：lat=0，lon 步长 5°，peel 中段几个 t
-      let eqIntersect = false;
-      const eqLons = []; for (let lo = -180; lo <= 180; lo += 5) eqLons.push(lo * D2R);
-      for (const t of [0.25, 0.35, 0.5]) {
-        const pts = eqLons.map((lo) => makePath(spherePos(0, lo), projFn(lo, 0), 0, S, fb)(t));
-        for (let i = 0; i < pts.length - 1 && !eqIntersect; i++) {
-          for (let j = i + 2; j < pts.length - 1 && !eqIntersect; j++) {
-            if (segSegDist(pts[i], pts[i + 1], pts[j], pts[j + 1]) < 1e-3) eqIntersect = true;
-          }
+    // 赤道自交：lat=0，lon 步长 5°，peel 中段几个 t；用 2D(x,y) 严格相交判定（排除闭合端点重合伪阳性）
+    let eqIntersect = false;
+    const eqLons = []; for (let lo = -180; lo <= 180; lo += 5) eqLons.push(lo * D2R);
+    function seg2dIntersect(a1, a2, b1, b2) {
+      // 仅当线段严格相交（交点在两段内部，t,u∈(1e-4,1-1e-4)）返回 true
+      const d1x = a2[0]-a1[0], d1y = a2[1]-a1[1];
+      const d2x = b2[0]-b1[0], d2y = b2[1]-b1[1];
+      const denom = d1x*d2y - d1y*d2x;
+      if (Math.abs(denom) < 1e-9) return false;
+      const dx = b1[0]-a1[0], dy = b1[1]-a1[1];
+      const t = (dx*d2y - dy*d2x) / denom;
+      const u = (dx*d1y - dy*d1x) / denom;
+      return t > 1e-4 && t < 1-1e-4 && u > 1e-4 && u < 1-1e-4;
+    }
+    for (const t of [0.25, 0.35, 0.5]) {
+      const pts = eqLons.map((lo) => peelPath(spherePos(0, lo), projFn(lo, 0), 0, lo, t, S));
+      for (let i = 0; i < pts.length - 1 && !eqIntersect; i++) {
+        for (let j = i + 2; j < pts.length - 1 && !eqIntersect; j++) {
+          if (seg2dIntersect(pts[i], pts[i + 1], pts[j], pts[j + 1])) eqIntersect = true;
         }
       }
-
-      out.details.push({
-        strength: S, fallback: fb,
-        sweeperMinRadius: +sweeperMin.toFixed(4),
-        sweeperMinVertex: sweeperMinV,
-        globalMinRadius: +globalMin.toFixed(4),
-        globalMinVertex: globalMinV,
-        equatorSelfIntersects: eqIntersect,
-        outsidePenetrateCount: outsidePenetrate,
-      });
     }
+
+    out.details.push({
+      strength: S,
+      sweeperMinRadius: +sweeperMin.toFixed(4),
+      sweeperMinVertex: sweeperMinV,
+      globalMinRadius: +globalMin.toFixed(4),
+      globalMinVertex: globalMinV,
+      equatorSelfIntersects: eqIntersect,
+      outsidePenetrateCount: outsidePenetrate,
+    });
   }
 
-  // 推荐 crossDZ 下的最小安全强度
+  // 最小安全强度
   let minSafe = null;
   for (const d of out.details) {
-    if (d.fallback !== 'crossDZ') continue;
     if (d.sweeperMinRadius >= 0.999 && !d.equatorSelfIntersects) { minSafe = d.strength; break; }
   }
-  out.minSafeStrength_crossDZ = minSafe;
+  out.minSafeStrength = minSafe;
+
+  // 正射南极 d 门控回归（修正①）：南极 P0≈P2 时 dGate 把 L→0，不引入新穿模（应为 0）
+  if (name === 'azimuthal-ortho') {
+    let southPolePenetrate = 0;
+    for (const lo of LONS) {
+      if (Math.abs(lo) < SWEEPER_LON) continue;          // 只看清扫者 |lon|>=120°
+      const la = -Math.PI / 2 + 0.01;                     // 南极附近（避开精确极点退化）
+      const p0 = spherePos(la, lo), p2 = projFn(lo, la);
+      let mr = Infinity;
+      for (const t of TS) mr = Math.min(mr, vLen(peelPath(p0, p2, la, lo, t, 1.5)));
+      if (mr < 0.999) southPolePenetrate++;
+    }
+    out.orthoSouthPolePenetrate = southPolePenetrate;     // 修正①生效时应为 0
+  }
+
   return out;
 }
 
@@ -180,8 +162,8 @@ let globalMinSafe = 0;
 for (const [name, fn] of Object.entries(PROJECTIONS)) {
   const r = verifyProjection(name, fn);
   report[name] = r;
-  if (r.minSafeStrength_crossDZ != null) globalMinSafe = Math.max(globalMinSafe, r.minSafeStrength_crossDZ);
+  if (r.minSafeStrength != null) globalMinSafe = Math.max(globalMinSafe, r.minSafeStrength);
 }
-report.__globalMinSafeStrength_crossDZ__ = globalMinSafe;
+report.__globalMinSafeStrength__ = globalMinSafe;
 
 process.stdout.write(JSON.stringify(report, null, 2));
