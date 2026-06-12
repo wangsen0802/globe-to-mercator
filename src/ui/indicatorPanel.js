@@ -1,6 +1,7 @@
 /**
  * 指标开关面板 — 左侧独立面板，始终可见
  */
+import { getCountryData } from '../indicators/areaComparison.js';
 
 const panelEl = document.getElementById('indicator-panel');
 
@@ -37,13 +38,16 @@ export function initIndicatorPanel(opts) {
   distSection.appendChild(createToggle('toggle-tissot', '朝索变形椭圆', true, (v) => opts.onTissotToggle(v)));
   distSection.appendChild(createToggle('toggle-area', '面积比较', false, (v) => opts.onAreaToggle(v)));
 
-  // 面积详情（展开/折叠）
+  // 面积详情（展开/折叠）— 数据取自 areaComparison 的 COUNTRY_DATA，避免与 3D 双源
   const areaDetail = createExpandable('area-detail');
   const areaInner = el('div', 'ind-detail-inner');
   areaInner.appendChild(el('div', 'ind-detail-title', '真实面积对比'));
-  areaInner.appendChild(createDotRow('#4fc3f7', '格陵兰', '216 万km²'));
-  areaInner.appendChild(createDotRow('#81c784', '非洲', '3,037 万km²'));
-  areaInner.appendChild(createDotRow('#ffb74d', '南美洲', '1,784 万km²'));
+  for (const c of getCountryData()) {
+    // color 为归一化 [r,g,b] 0-1，与 3D 区域填充色 THREE.Color(...color) 同源
+    const [r, g, b] = c.color;
+    const cssColor = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+    areaInner.appendChild(createDotRow(cssColor, c.name, `${c.realArea.toLocaleString()} 万km²`));
+  }
   const note = el('div', 'ind-note', '非洲 ≈ 14× 格陵兰，但墨卡托投影中看起来差不多大');
   areaInner.appendChild(note);
   areaDetail.appendChild(areaInner);
