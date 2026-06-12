@@ -8,6 +8,8 @@ uniform float uConicStdLat;    // Lambert 标准纬线（弧度）
 // 方位投影参数
 uniform float uAzimuthalType;  // 0=正射, 1=立体
 
+uniform float uPeelStrength;  // 剥橘子外鼓强度（默认 1.5，范围 1.5~2.5）
+
 varying vec3 vNormal;
 varying vec3 vWorldPos;
 varying float vLocalProgress;
@@ -19,9 +21,8 @@ varying vec3 vBitangent; // 副切线
 #include common/projections.glsl
 
 void main() {
-  // 原始球面位置和法线
+  // 原始球面位置（法线改为从贝塞尔曲面数值重算，不再用 attribute normal）
   vec3 spherePos = position;
-  vec3 sphereNormal = normal;
 
   // 从球面坐标计算经纬度
   float latitude = asin(clamp(normalize(position).y, -1.0, 1.0));
@@ -36,17 +37,8 @@ void main() {
   vLatitude = latitude;
   vRawUv = uv.x;
 
-  // 根据投影类型选择目标平面坐标
-  vec3 flatPos;
-  if (uProjectionID < 0.5) {
-    flatPos = projectMercator(longitude, latitude);
-  } else if (uProjectionID < 1.5) {
-    flatPos = projectPlateCarree(longitude, latitude);
-  } else if (uProjectionID < 2.5) {
-    flatPos = projectConic(longitude, latitude, uConicStdLat);
-  } else {
-    flatPos = projectAzimuthal(longitude, latitude, uAzimuthalType);
-  }
+  // 根据投影类型选择目标平面坐标（共享分派）
+  vec3 flatPos = applyProjection(longitude, latitude);
 
   // ===== "剥橘子" 逐层展开 =====
   float normalizedLat = abs(latitude) / (PI / 2.0);
@@ -56,35 +48,35 @@ void main() {
   localProgress = easeInOutCubic(localProgress);
   vLocalProgress = localProgress;
 
-  // 在球面和平面之间插值位置
-  vec3 finalPos = mix(spherePos, flatPos, localProgress);
+  // 在球面和平面之间用"穿透度加权外鼓贝塞尔"变形（消除接缝穿模）
+  vec3 finalPos = peelPath(spherePos, flatPos, latitude, longitude, localProgress, uPeelStrength);
 
-  // 法线插值
-  vec3 flatNormal = vec3(0.0, 0.0, 1.0);
-  vec3 finalNormal = normalize(mix(sphereNormal, flatNormal, localProgress));
+  // ===== 法线/切线/副切线：从贝塞尔曲面数值偏导重算 =====
+  // 端点天然匹配（t=0→球面外法线 cross(∂lon,∂lat)，t=1→+Z）；mercator/方位等投影对 lat 有钳位，
+  // 钳位极区里 lat+eps 不再变化 → T_lat≈0 → cross 退化，故加长度护栏：退化时回退到解析球面切线基 + 线性法线。
+  float nEps = 0.001;
+  vec3 pLat = peeledAt(latitude + nEps, longitude, localProgress, uPeelStrength);
+  vec3 pLon = peeledAt(latitude, longitude + nEps, localProgress, uPeelStrength);
+  vec3 T_lon = pLon - finalPos;
+  vec3 T_lat = pLat - finalPos;
+  vec3 numNormal = cross(T_lon, T_lat);
+
+  vec3 finalNormal, finalTangent, finalBitangent;
+  if (length(numNormal) > 1e-6) {
+    finalNormal   = normalize(numNormal);
+    finalTangent   = normalize(T_lon);
+    finalBitangent = normalize(T_lat);
+  } else {
+    // 退化（极点 / 钳位极区）：解析球面切线基 + 球面→平面线性混合（等价 T3 前的稳定行为）
+    float cl = cos(latitude), sl = sin(latitude), clo = cos(longitude), slo = sin(longitude);
+    vec3 sTangent   = normalize(vec3(-slo * cl, 0.0, -clo * cl));       // ∂Pos/∂lon
+    vec3 sBitangent = normalize(vec3(-clo * sl, cl, slo * sl));         // ∂Pos/∂lat
+    finalNormal   = normalize(mix(normalize(spherePos), vec3(0.0, 0.0, 1.0), localProgress));
+    finalTangent   = normalize(mix(sTangent, vec3(1.0, 0.0, 0.0), localProgress));
+    finalBitangent = normalize(mix(sBitangent, vec3(0.0, 1.0, 0.0), localProgress));
+  }
 
   vNormal = normalize(normalMatrix * finalNormal);
-
-  // ===== 切线空间基向量（法线贴图用） =====
-  // 球面切线：沿经度方向（dPos/dLon），副切线沿纬度方向（dPos/dLat）
-  float cosLat = cos(latitude);
-  float sinLat = sin(latitude);
-  float cosLon = cos(longitude);
-  float sinLon = sin(longitude);
-
-  // 球面切线：经度方向偏导 ∂Pos/∂lon = (-sinLon * cosLat, 0, -cosLon * cosLat)
-  vec3 sphereTangent = normalize(vec3(-sinLon * cosLat, 0.0, -cosLon * cosLat));
-  // 球面副切线：纬度方向偏导 ∂Pos/∂lat = (-cosLon * sinLat, cosLat, sinLon * sinLat)
-  vec3 sphereBitangent = normalize(vec3(-cosLon * sinLat, cosLat, sinLon * sinLat));
-
-  // 平面切线/副切线
-  vec3 flatTangent = vec3(1.0, 0.0, 0.0);
-  vec3 flatBitangent = vec3(0.0, 1.0, 0.0);
-
-  // 跟法线一样在球面和平面之间插值
-  vec3 finalTangent = normalize(mix(sphereTangent, flatTangent, localProgress));
-  vec3 finalBitangent = normalize(mix(sphereBitangent, flatBitangent, localProgress));
-
   vTangent = normalize(normalMatrix * finalTangent);
   vBitangent = normalize(normalMatrix * finalBitangent);
 

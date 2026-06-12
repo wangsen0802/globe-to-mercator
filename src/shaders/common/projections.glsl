@@ -73,3 +73,57 @@ vec3 projectAzimuthal(float lon, float lat, float type) {
     );
   }
 }
+
+// ===== 投影分派（globe.vert / indicator.vert 共用）=====
+vec3 applyProjection(float lon, float lat) {
+  if (uProjectionID < 0.5) return projectMercator(lon, lat);
+  else if (uProjectionID < 1.5) return projectPlateCarree(lon, lat);
+  else if (uProjectionID < 2.5) return projectConic(lon, lat, uConicStdLat);
+  else return projectAzimuthal(lon, lat, uAzimuthalType);
+}
+
+// 球面位置（lon 0° → +x，与 SphereGeometry 约定一致）
+vec3 sphereFromLatLon(float lat, float lon) {
+  return vec3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon));
+}
+
+// ===== 剥橘子路径（穿透度加权外鼓二次贝塞尔）=====
+// 与 src/utils/peel.js 的 peelPath() 逐项一致，由 scripts/glsl-lint.mjs 护栏守护。
+const float PEEL_DGATE_MAX = 0.05;
+const float PEEL_LONW_A = 0.3;
+const float PEEL_LONW_B = 1.0;
+const float PEEL_LATBAND = 0.0349;   // 2°
+const float PEEL_LONBAND = 2.967;    // 170°
+
+vec3 peelPath(vec3 p0, vec3 p2, float lat, float lon, float t, float strength) {
+  vec3 r = normalize(p0);
+  vec3 d = p2 - p0;
+  float dLen = length(d);
+  float dGate = smoothstep(0.0, PEEL_DGATE_MAX, dLen);
+
+  float dr = dot(d, r);
+  vec3 dPerp = d - dr * r;
+  float pen = max(0.0, -dr);
+
+  vec3 poleY = vec3(0.0, lat >= 0.0 ? 1.0 : -1.0, 0.0);
+  vec3 liftDir0 = length(dPerp) > 1e-3 ? normalize(dPerp) : poleY;
+
+  float latGate = 1.0 - smoothstep(0.0, PEEL_LATBAND, abs(lat));
+  float lonGate = smoothstep(PEEL_LONBAND, PI, abs(lon));
+  float yBlend = latGate * lonGate;
+  vec3 liftDir = normalize(mix(liftDir0, poleY, yBlend));
+
+  float lonWeight = smoothstep(PEEL_LONW_A, PEEL_LONW_B, abs(lon) / PI);
+  float L = strength * (0.6 + 0.4 * pen) * lonWeight * dGate;
+  vec3 C = p0 + L * liftDir;
+
+  float u = 1.0 - t;
+  return u * u * p0 + 2.0 * u * t * C + t * t * p2;
+}
+
+// 给定 lat/lon/t 求 peeled 位置（数值法线用：对 lat/lon 求邻域）
+vec3 peeledAt(float lat, float lon, float t, float strength) {
+  vec3 sp = sphereFromLatLon(lat, lon);
+  vec3 fp = applyProjection(lon, lat);
+  return peelPath(sp, fp, lat, lon, t, strength);
+}

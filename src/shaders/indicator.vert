@@ -17,13 +17,7 @@ varying vec3 vSurfaceNormal;  // 球面法线（用于背面判断）
 
 #include common/projections.glsl
 
-// 根据当前投影 ID 选择投影函数
-vec3 applyProjection(float lon, float lat) {
-  if (uProjectionID < 0.5) return projectMercator(lon, lat);
-  else if (uProjectionID < 1.5) return projectPlateCarree(lon, lat);
-  else if (uProjectionID < 2.5) return projectConic(lon, lat, uConicStdLat);
-  else return projectAzimuthal(lon, lat, uAzimuthalType);
-}
+// applyProjection 由 common/projections.glsl 提供（globe.vert / indicator.vert 共用）
 
 // 数值计算面积变形因子（雅可比行列式 / cos(lat)）
 float computeAreaDistortion(float lat, float lon) {
@@ -56,7 +50,7 @@ void main() {
   // 投影变换
   vec3 flatPos = applyProjection(longitude, latitude);
 
-  // 剥橘子动画（与 globe.vert 逻辑一致）
+  // 剥橘子动画（注：globe.vert 已改贝塞尔路径，本文件位置仍用线性 mix，Task 4 同步）
   float normalizedLat = abs(latitude) / (PI / 2.0);
   float localDelay = normalizedLat * normalizedLat * uSpreadDelay;
   float localProgress = clamp((uProgress - localDelay) / (1.0 - uSpreadDelay + 0.001), 0.0, 1.0);
