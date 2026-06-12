@@ -201,6 +201,7 @@ greatCircleRoutes.group.visible = false;
 const stars = createStars();
 let globe = null;
 let showGrid = true;  // 缓存经纬线开关状态，globe 异步加载后读取
+let autoRotate = true;  // 球面态自转开关（仅 progress < 0.05 时生效）
 
 // 创建 1×1 平坦法线 fallback（RGB = [0.5, 0.5, 1.0] = 指向上方的法线）
 // 防止 uNormalMap 为 null 时 GLSL texture2D() 行为未定义
@@ -372,6 +373,13 @@ initIndicatorPanel({
   },
   onNormalToggle: (visible) => {
     if (globe) globe.material.uniforms.uNormalStrength.value = visible ? 1.0 : 0.0;
+  },
+  onWireframeToggle: (visible) => {
+    // wireframe 在顶点着色器输出后光栅化，能正确跟随变形动画
+    if (globe) globe.material.wireframe = visible;
+  },
+  onAutoRotateToggle: (visible) => {
+    autoRotate = visible;
   }
 });
 
@@ -386,7 +394,7 @@ function animate() {
   // 仅在航线可见时更新标签/发光粒子位置（内部约 600 点/帧三角运算），关闭时跳过省 CPU
   if (greatCircleRoutes.group.visible) greatCircleRoutes.updateLabels(progress, camera);
 
-  if (progress < 0.05 && globe) {
+  if (autoRotate && progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;
     // 指标组跟随地球自转
     tissotIndicators.group.rotation.y = globe.mesh.rotation.y;

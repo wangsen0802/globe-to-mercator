@@ -21,6 +21,10 @@ function el(tag, className, text) {
  * @param {Function} opts.onTissotToggle - 朝索椭圆开关回调
  * @param {Function} opts.onAreaToggle - 面积比较开关回调
  * @param {Function} opts.onRouteToggle - 大圆航线开关回调
+ * @param {Function} opts.onGridToggle - 经纬线开关回调
+ * @param {Function} opts.onNormalToggle - 地形光影开关回调
+ * @param {Function} opts.onWireframeToggle - 球面线框开关回调
+ * @param {Function} opts.onAutoRotateToggle - 球体自转开关回调
  */
 export function initIndicatorPanel(opts) {
   callbacks = opts;
@@ -72,8 +76,19 @@ export function initIndicatorPanel(opts) {
   enhanceSection.appendChild(el('div', 'ind-section-label', '显示增强'));
 
   enhanceSection.appendChild(createToggle('toggle-normal', '地形光影', true, (v) => opts.onNormalToggle(v)));
+  // 球面线框：material.wireframe，在顶点着色器变形后光栅化，故能跟随剥橘子/投影动画
+  enhanceSection.appendChild(createToggle('toggle-wireframe', '球面线框', false, (v) => opts.onWireframeToggle(v)));
 
   panelEl.appendChild(enhanceSection);
+
+  // ===== 场景控制 =====
+  const sceneSection = el('div', 'ind-section');
+  sceneSection.appendChild(el('div', 'ind-section-label', '场景控制'));
+
+  // 球面态自转：仅 progress < 0.05（未开始剥橘子）时生效，指标组自动跟随
+  sceneSection.appendChild(createToggle('toggle-rotate', '球体自转', true, (v) => opts.onAutoRotateToggle(v)));
+
+  panelEl.appendChild(sceneSection);
 }
 
 // 创建 toggle 开关行
