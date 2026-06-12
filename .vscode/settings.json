@@ -1,0 +1,19 @@
+{
+  // GLSL Lint 扩展(CADS-glsllint)配置
+  // 本项目用 .vert/.frag/.glsl 扩展名，需手动关联 shader stage，否则扩展无法判定 stage 会一直弹警告
+
+  // 把扩展名映射到 glslang stage —— 消除 "failed to detect shader stage" 警告
+  "glsllint.additionalStageAssociations": {
+    ".vert": "vert",
+    ".frag": "frag",
+    ".vs": "vert",
+    ".fs": "frag"
+  },
+
+  // .glsl 是共享函数库(projections.glsl)，无独立 stage；用 frag 作为回退，避免每个 .glsl 文件都弹警告
+  // 注意：它含自定义 #include 指令，VS Code 实时校验仍可能报该指令语法错误，属正常现象 —— 以 pnpm lint:glsl 为准
+  "glsllint.fallBackStage": "frag",
+
+  // 使用与脚本同款的 glslangValidator(brew install glslang)，保证 VS Code 与 pnpm lint:glsl 结果一致
+  "glsllint.glslangValidatorPath": "glslangValidator"
+}
