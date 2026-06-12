@@ -30,7 +30,7 @@ src/
 ├── textures/
 │   └── index.js         # 纹理注册表：getAllTextures / getDefaultTextureId
 ├── utils/
-│   └── math.js          # 共享数学常量（PI、DEG2RAD、RAD2DEG）
+│   └── math.js          # 共享数学常量（PI、DEG2RAD、RAD2DEG、CONIC_STD_LAT_DEFAULT）
 └── shaders/
     ├── common/
     │   └── projections.glsl  # 共享投影函数（PI、缓动、4种投影），#include 引入
@@ -148,6 +148,6 @@ pnpm lint:glsl  # GLSL 着色器语法检查（展开 include + 注入 Three.js 
 - 注释使用中文
 - HTML lang 设为 `zh-CN`
 - 着色器中 `#define PI`：`projections.glsl` 定义一次，`#include` 它的 vert 着色器复用；但 `globe.frag` 等 frag 着色器**不 include 共享库**，各自独立 `#define PI`（修改 PI 精度需同步多处）
-- uniform 命名：`u` 前缀（uProgress, uSpreadDelay, uTexture, uNormalMap, uNormalStrength, uLightDir ~ uLightDir4, uShowGrid, uProjectionID）
+- uniform 命名：`u` 前缀（uProgress, uSpreadDelay, uTexture, uNormalMap, uNormalStrength, uNormalBumpScale, uLightDir ~ uLightDir4, uShowGrid, uProjectionID, uConicStdLat, uAzimuthalType）
 - varying 命名：`v` 前缀（vUv, vNormal, vWorldPos, vLocalProgress, vRawUv, vLatitude, vTangent, vBitangent）
 - GLSL 共享代码放 `src/shaders/common/`，用 `#include common/文件名.glsl` 引入
