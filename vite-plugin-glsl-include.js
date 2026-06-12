@@ -13,23 +13,31 @@ const INCLUDE_RE = /^[ \t]*#include[ \t]+(.+?)[ \t]*$/gm;
 // 依赖图：被 include 的文件绝对路径 → 依赖它的文件绝对路径集合
 const includeDeps = new Map();
 
-function expandIncludes(source, baseDir, importerPath) {
-  const resolved = new Set();
+// 展开递归 #include（导出供 scripts/glsl-lint.mjs 复用，保证插件与 lint 单源）
+// seen 沿调用链透传（每分支拷贝），基于绝对路径检测跨文件循环引用 A→B→A
+export function expandIncludes(source, baseDir, importerPath, seen = new Set()) {
   return source.replace(INCLUDE_RE, (_, incPath) => {
     const cleanPath = incPath.replace(/['"]/g, '');
-    if (resolved.has(cleanPath)) return '';
-    resolved.add(cleanPath);
-
     const absPath = resolve(baseDir, cleanPath);
 
-    // 记录依赖：absPath 被 importerPath 引用
-    if (!includeDeps.has(absPath)) {
-      includeDeps.set(absPath, new Set());
+    // 循环引用检测：absPath 已在当前祖先路径中 → 跳过，避免无限 readFileSync/栈溢出
+    if (seen.has(absPath)) {
+      console.warn(`[glsl-include] 检测到循环引用，已跳过: ${absPath}`);
+      return '';
     }
-    includeDeps.get(absPath).add(importerPath);
+    const nextSeen = new Set(seen);
+    nextSeen.add(absPath);
+
+    // 记录 HMR 依赖：absPath 被 importerPath 引用（importerPath 为空时跳过，如 lint 场景）
+    if (importerPath) {
+      if (!includeDeps.has(absPath)) {
+        includeDeps.set(absPath, new Set());
+      }
+      includeDeps.get(absPath).add(importerPath);
+    }
 
     const content = readFileSync(absPath, 'utf-8');
-    return expandIncludes(content, dirname(absPath), importerPath);
+    return expandIncludes(content, dirname(absPath), importerPath, nextSeen);
   });
 }
 

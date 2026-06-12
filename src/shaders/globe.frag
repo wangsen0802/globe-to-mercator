@@ -36,11 +36,11 @@ void main() {
 
   // 构建 TBN 矩阵，将切线空间法线变换到世界空间
   vec3 T = normalize(vTangent);
-  vec3 B = normalize(vBitangent);
   vec3 N = normalize(vNormal);
-  // 正交化：确保 TBN 互相垂直
+  // 正交化 T，副切线由 cross(N,T) 重算并以 vBitangent 校正手性
+  // （防止过渡中切线空间翻转导致法线贴图凹凸反向；vBitangent 此时才真正被使用）
   T = normalize(T - dot(T, N) * N);
-  B = cross(N, T);
+  vec3 B = cross(N, T) * sign(dot(cross(N, T), vBitangent));
 
   vec3 perturbedNormal = normalize(T * tangentNormal.x + B * tangentNormal.y + N * tangentNormal.z);
 

@@ -201,7 +201,8 @@ function jsProjectConic(lon, lat, stdLat) {
   const n = Math.sin(Math.max(0.1, Math.min(1.4, stdLat)));
   const tanStd = Math.max(0.001, Math.tan(PI / 4 + stdLat / 2));
   const F = Math.cos(stdLat) * Math.pow(tanStd, n) / Math.max(0.01, n);
-  const clampedLat = Math.max(-1.3, Math.min(1.3, lat));
+  // 圆锥纬度上限对齐 projections.glsl:42 的 clamp(lat, -1.3, 1.56)，避免 JS/GPU 投影漂移
+  const clampedLat = Math.max(-1.3, Math.min(1.56, lat));
   const tanLat = Math.max(0.001, Math.tan(PI / 4 + clampedLat / 2));
   const rho = F / Math.pow(tanLat, n);
   const tanEq = Math.max(0.001, Math.tan(PI / 4));

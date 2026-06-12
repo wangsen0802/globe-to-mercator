@@ -111,6 +111,8 @@ function createGlobe(texture) {
 }
 
 // 切换地球纹理（异步加载 + 实时替换 uTexture uniform）
+// loadSeq：防止快速连点时旧请求回调覆盖新选择（竞态）——过期请求只缓存不应用
+let loadSeq = 0;
 function switchTexture(id) {
   if (id === currentTextureId) return;
 
@@ -129,14 +131,21 @@ function switchTexture(id) {
   const btn = document.querySelector(`.tex-btn[data-tex-id="${id}"]`);
   if (btn) btn.classList.add('loading');
 
+  const reqId = ++loadSeq;
   textureLoader.load(texEntry.url, (texture) => {
     texture.colorSpace = THREE.SRGBColorSpace;
     textureCache[id] = texture;
     if (btn) btn.classList.remove('loading');
+    // 过期请求（用户已连点切到别的纹理）只缓存不应用，避免覆盖最新选择
+    if (reqId !== loadSeq) return;
     applyTexture(id, texture);
   }, undefined, (err) => {
-    console.warn(`纹理 ${id} 加载失败`, err);
-    if (btn) btn.classList.remove('loading');
+    console.warn(`纹理 ${id} 加载失败，保持当前纹理`, err);
+    if (btn) {
+      btn.classList.remove('loading');
+      btn.classList.add('load-failed'); // 失败状态钩子（可配 CSS 提示用户）
+    }
+    // 运行时切换失败不中断体验，保持当前纹理（与初始加载三级 fallback 不同，见 CLAUDE.md）
   });
 }
 
@@ -211,7 +220,11 @@ let pendingLoads = 2;
 function onResourceReady() {
   pendingLoads--;
   if (pendingLoads === 0) {
-    globe = createGlobe(textureCache[defaultTexId]);
+    // 用 currentTextureId 而非 defaultTexId：fallback 分支可能已把实际可用纹理
+    // 写到 'daymap' 或 'canvas-fallback' 键（defaultTexId='blue-marble' 此时未写入缓存）
+    const readyTex = textureCache[currentTextureId];
+    if (!readyTex) throw new Error(`初始化失败：纹理 ${currentTextureId} 未加载，fallback 链全部失败`);
+    globe = createGlobe(readyTex);
     console.log('地球纹理 + 法线贴图加载完成');
     initTextureSwitcher();
   }
@@ -369,7 +382,8 @@ function animate() {
 
   // 更新共享进度 uniform（地球和指标同步）
   sharedUniforms.uProgress.value = progress;
-  greatCircleRoutes.updateLabels(progress, camera);
+  // 仅在航线可见时更新标签/发光粒子位置（内部约 600 点/帧三角运算），关闭时跳过省 CPU
+  if (greatCircleRoutes.group.visible) greatCircleRoutes.updateLabels(progress, camera);
 
   if (progress < 0.05 && globe) {
     globe.mesh.rotation.y += 0.002;

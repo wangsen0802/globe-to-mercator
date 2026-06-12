@@ -7,8 +7,8 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { resolve, dirname, join, relative, basename } from 'path';
 import { execFileSync } from 'child_process';
-
-const INCLUDE_RE = /^[ \t]*#include[ \t]+(.+?)[ \t]*$/gm;
+// 复用插件的 #include 展开逻辑（含循环引用检测），避免两份副本漂移
+import { expandIncludes } from '../vite-plugin-glsl-include.js';
 
 // Three.js 自动注入的内置声明 — 验证时需要提前声明
 const THREEJS_VERT_PREAMBLE = `
@@ -30,19 +30,6 @@ precision mediump float;
 uniform mat4 viewMatrix;
 uniform vec3 cameraPosition;
 `;
-
-// 展开递归 #include
-function expandIncludes(source, baseDir) {
-  const resolved = new Set();
-  return source.replace(INCLUDE_RE, (_, incPath) => {
-    const cleanPath = incPath.replace(/['"]/g, '');
-    if (resolved.has(cleanPath)) return '';
-    resolved.add(cleanPath);
-    const absPath = resolve(baseDir, cleanPath);
-    const content = readFileSync(absPath, 'utf-8');
-    return expandIncludes(content, dirname(absPath));
-  });
-}
 
 // 递归查找着色器文件
 function findShaders(dir) {
@@ -122,4 +109,25 @@ for (const file of files) {
 }
 
 console.log(`\n${files.length} 个着色器文件，\x1b[31m${errorCount}\x1b[0m 个错误`);
+
+// ── 投影 clamp 边界一致性护栏（JS 复刻副本 vs GLSL 真源）──
+// CLAUDE.md 声明的"单源维护"仅对 GLSL 成立；greatCircleRoutes.js 有手写 JS 副本，
+// 这里在构建期断言两端数值一致，漂移即 fail。新增/修改投影 clamp 边界后必跑 pnpm lint:glsl。
+function extractNum(re, src) {
+  const m = re.exec(src);
+  return m ? m[1] : null;
+}
+
+const glslProjSrc = readFileSync(resolve(shadersDir, 'common/projections.glsl'), 'utf-8');
+const jsRoutesSrc = readFileSync(resolve(rootDir, 'src/indicators/greatCircleRoutes.js'), 'utf-8');
+
+// 圆锥纬度上限：GLSL clamp(lat, -1.3, X) ↔ JS Math.min(X, lat)
+const glslConicMax = extractNum(/clamp\(\s*lat,\s*-1\.3,\s*([\d.]+)\s*\)/, glslProjSrc);
+const jsConicMax = extractNum(/Math\.min\(\s*([\d.]+),\s*lat\s*\)/, jsRoutesSrc);
+if (glslConicMax && jsConicMax && glslConicMax !== jsConicMax) {
+  console.log(`\x1b[31m✗ 投影漂移\x1b[0m: 圆锥纬度上限 GLSL=${glslConicMax} ≠ JS=${jsConicMax}`);
+  console.log(`  请对齐 src/shaders/common/projections.glsl 与 src/indicators/greatCircleRoutes.js`);
+  errorCount++;
+}
+
 process.exit(errorCount > 0 ? 1 : 0);
