@@ -187,6 +187,12 @@ function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+// GLSL smoothstep 的 JS 等价（边界平滑过渡），供 jsAzimuthalFarMask 用
+function smoothstepJS(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 function jsProjectMercator(lon, lat) {
   return [lon, Math.max(-PI, Math.min(PI, Math.log(Math.tan(PI / 4 + lat / 2)))), 0];
 }
@@ -233,16 +239,32 @@ function jsApplyProjection(lon, lat, uniforms) {
   return jsProjectAzimuthal(lon, lat, uniforms.uAzimuthalType.value);
 }
 
+// 方位投影远端半球标记（镜像 indicator.vert/globe.vert 的 vFarMask 公式）
+// 非方位投影返回 0；正射用 cosC（背面），立体用 -sin(lat)（南半球）
+function jsAzimuthalFarMask(lat, lon, uniforms) {
+  if (uniforms.uProjectionID.value <= 2.5) return 0;
+  if (uniforms.uAzimuthalType.value < 0.5) {
+    const cosC = Math.cos(lat) * Math.cos(lon);
+    return smoothstepJS(0.0, 0.2, -cosC);
+  }
+  return smoothstepJS(0.0, 0.2, -Math.sin(lat));
+}
+
+// 局部剥开进度（含纬度延迟 + easeInOutCubic），computeLabelPosition 与精灵淡出共用，避免公式漂移
+function computeLocalProgress(lat, progress, uniforms) {
+  const spreadDelay = uniforms.uSpreadDelay.value;
+  const normalizedLat = Math.abs(lat) / (PI / 2);
+  const localDelay = normalizedLat * normalizedLat * spreadDelay;
+  const localProgress = Math.max(0, Math.min(1, (progress - localDelay) / (1 - spreadDelay + 0.001)));
+  return easeInOutCubic(localProgress);
+}
+
 function computeLabelPosition(lat, lon, progress, uniforms) {
   const sphere = latLonToXYZ(lat, lon);
   // 地球 phiStart=-π/2 背面切口：球面位置同步旋转 -π/2（绕 Y 轴，(x,y,z)→(-z,y,x)），平面投影不动
   const rsphere = [-sphere[2], sphere[1], sphere[0]];
   const flat = jsApplyProjection(lon, lat, uniforms);
-  const spreadDelay = uniforms.uSpreadDelay.value;
-  const normalizedLat = Math.abs(lat) / (PI / 2);
-  const localDelay = normalizedLat * normalizedLat * spreadDelay;
-  const localProgress = Math.max(0, Math.min(1, (progress - localDelay) / (1 - spreadDelay + 0.001)));
-  const eased = easeInOutCubic(localProgress);
+  const eased = computeLocalProgress(lat, progress, uniforms);
   return [
     rsphere[0] + (flat[0] - rsphere[0]) * eased,
     rsphere[1] + (flat[1] - rsphere[1]) * eased,
@@ -391,6 +413,11 @@ export function createGreatCircleRoutes(uniforms) {
     for (const { sprite, lat, lon } of sprites) {
       const p = computeLabelPosition(lat, lon, progress, uniforms);
       sprite.position.set(p[0], p[1], p[2]);
+
+      // 方位投影远端半球随进度淡出（其他投影 farMask=0 → opacity=1，无影响）
+      const eased = computeLocalProgress(lat, progress, uniforms);
+      const fade = 1 - jsAzimuthalFarMask(lat, lon, uniforms) * eased;
+      sprite.material.opacity = fade;
 
       // 球面状态下隐藏背面标签，展开过程中逐渐恢复可见
       if (camPos) {
