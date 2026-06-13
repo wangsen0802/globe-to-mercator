@@ -106,7 +106,8 @@ function createGlobe(texture, normalMap) {
     vertexShader,
     fragmentShader,
     uniforms,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    transparent: true
   });
 
   const mesh = new THREE.Mesh(geometry, material);

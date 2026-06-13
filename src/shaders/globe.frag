@@ -16,6 +16,7 @@ varying float vLatitude;
 varying float vRawUv;  // 原始 uv.x，线性经度下直接用作纹理 u 坐标
 varying vec3 vTangent;
 varying vec3 vBitangent;
+varying float vFarMask;
 
 #define PI 3.14159265359
 
@@ -121,5 +122,7 @@ void main() {
   // Gamma 校正：线性空间 → sRGB 输出（匹配显示器响应曲线）
   color = pow(color, vec3(1.0 / 2.2));
 
-  gl_FragColor = vec4(color, 1.0);
+  // 方位投影远端半球随剥开进度淡出（非方位投影 vFarMask=0 → alpha 恒 1）
+  float alpha = 1.0 - vFarMask * vLocalProgress;
+  gl_FragColor = vec4(color, alpha);
 }

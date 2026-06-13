@@ -15,6 +15,7 @@ varying float vLatitude;
 varying float vRawUv;  // 原始 uv.x，线性经度参数化下直接作为纹理 u 坐标
 varying vec3 vTangent;   // 切线（用于法线贴图 TBN 变换）
 varying vec3 vBitangent; // 副切线
+varying float vFarMask;  // 方位投影远端半球淡出标记（0=保留，1=淡出）
 
 #include common/projections.glsl
 
@@ -47,6 +48,19 @@ void main() {
   } else {
     flatPos = projectAzimuthal(longitude, latitude, uAzimuthalType);
   }
+
+  // 方位投影远端半球淡出标记：非方位投影恒 0
+  // 正射用 cosC=cos(lat)cos(lon)（<0 为背面），立体用 -sin(lat)（南半球）
+  float farMask = 0.0;
+  if (uProjectionID > 2.5) {
+    if (uAzimuthalType < 0.5) {
+      float cosC = cos(latitude) * cos(longitude);
+      farMask = smoothstep(0.0, 0.2, -cosC);
+    } else {
+      farMask = smoothstep(0.0, 0.2, -sin(latitude));
+    }
+  }
+  vFarMask = farMask;
 
   // ===== "剥橘子" 逐层展开 =====
   float normalizedLat = abs(latitude) / (PI / 2.0);
