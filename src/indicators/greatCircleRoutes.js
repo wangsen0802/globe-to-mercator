@@ -216,7 +216,13 @@ function jsProjectAzimuthal(lon, lat, type) {
   }
   const clampedLat = Math.max(-1.4, Math.min(1.4, lat));
   const k = 2 / Math.max(0.01, 1 + Math.sin(clampedLat));
-  return [k * Math.cos(clampedLat) * Math.sin(lon), k * Math.cos(clampedLat) * Math.cos(lon), 0];
+  const px = k * Math.cos(clampedLat) * Math.sin(lon);
+  const py = k * Math.cos(clampedLat) * Math.cos(lon);
+  // 半径钳制：与 projections.glsl 的 stereoMaxR 对齐（glsl-lint.mjs 护栏校验）
+  const stereoMaxR = 2.3;
+  const r = Math.hypot(px, py);
+  const s = r > stereoMaxR ? stereoMaxR / r : 1;
+  return [px * s, py * s, 0];
 }
 
 function jsApplyProjection(lon, lat, uniforms) {

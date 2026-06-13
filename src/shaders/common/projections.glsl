@@ -66,11 +66,15 @@ vec3 projectAzimuthal(float lon, float lat, float type) {
     // 立体投影 (Stereographic) — 保角，极地地图常用
     float clampedLat = clamp(lat, -1.4, 1.4);
     float k = 2.0 / max(1.0 + sin(clampedLat), 0.01);
-    return vec3(
+    vec2 p = vec2(
       k * cos(clampedLat) * sin(lon),
-      k * cos(clampedLat) * cos(lon),
-      0.0
+      k * cos(clampedLat) * cos(lon)
     );
+    // 半径钳制：南半球 k 发散，钳到北半球圆盘（半径≈2）外缘窄环，配合远端淡出（见 Task 2+）
+    float stereoMaxR = 2.3;
+    float r = length(p);
+    if (r > stereoMaxR) p *= stereoMaxR / r;
+    return vec3(p.x, p.y, 0.0);
   }
 }
 

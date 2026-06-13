@@ -130,4 +130,13 @@ if (glslConicMax && jsConicMax && glslConicMax !== jsConicMax) {
   errorCount++;
 }
 
+// 立体投影半径钳制：GLSL `stereoMaxR = X` ↔ JS `stereoMaxR = X`（同一标识符，一个正则覆盖两端）
+const glslStereoMaxR = extractNum(/stereoMaxR\s*=\s*([\d.]+)/, glslProjSrc);
+const jsStereoMaxR = extractNum(/stereoMaxR\s*=\s*([\d.]+)/, jsRoutesSrc);
+if (glslStereoMaxR && jsStereoMaxR && glslStereoMaxR !== jsStereoMaxR) {
+  console.log(`\x1b[31m✗ 投影漂移\x1b[0m: 立体投影半径上限 GLSL=${glslStereoMaxR} ≠ JS=${jsStereoMaxR}`);
+  console.log(`  请对齐 src/shaders/common/projections.glsl 与 src/indicators/greatCircleRoutes.js`);
+  errorCount++;
+}
+
 process.exit(errorCount > 0 ? 1 : 0);
