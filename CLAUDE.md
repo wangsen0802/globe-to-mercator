@@ -60,7 +60,7 @@ docs/                     # 学习文档：架构指南、main.js 深入解析�
 - **多纹理切换**: 4 种地球纹理（蓝色弹珠、日间、夜间、云层）实时切换，底部纹理切换栏 UI
 - **法线贴图光照**: `uNormalMap` 全局常驻，通过 TBN 矩阵将法线从切线空间变换到世界空间，增强地形凹凸光影细节。`uNormalStrength` 控制强度（0~1），左侧面板"地形光影"开关
 - **球体细分**: 360x180 段，保证变形时足够的顶点密度
-- **多投影支持**: 墨卡托(3857)、等距柱状(4326)、圆锥、方位（正射/立体），通过 uProjectionID 切换。⚠️ 方位投影子类型（正射 `uAzimuthalType=0` / 立体 `=1`）和圆锥标准纬度 `uConicStdLat`（固定 30°N）**代码支持但当前无 UI 切换控件**
+- **多投影支持**: 墨卡托(3857)、等距柱状(4326)、圆锥、正射、立体，通过 uProjectionID 切换。正射投影(id=3)/立体投影(id=4)为**两个独立投影按钮**（各自教育面板：公式/特性/用途独立介绍），但复用方位 shader（`uProjectionID=3` 的 `projectAzimuthal` + 远端 mask），用 `uAzimuthalType` 区分（正射=0/立体=1，由各自配置决定、非 UI 切换）；立体 id=4 但 shader 层 `uProjectionID` 由配置覆盖为 3。圆锥标准纬度 `uConicStdLat`（固定 30°N）**仍无 UI**
 - **共享 uniform**: `sharedUniforms` 对象被地球和指标系统共用，切换投影时自动同步
 - **4 光源系统**: `uLightDir` ~ `uLightDir4`，从不同角度照亮球体，增强立体感
 - **经纬线开关**: 通过 `uShowGrid` uniform 控制经纬线显示/隐藏

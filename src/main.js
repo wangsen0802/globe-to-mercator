@@ -363,14 +363,16 @@ function switchProjection(id) {
     b.classList.toggle('active', parseInt(b.dataset.projId) === id);
   });
 
-  // 更新共享 uniform（地球和指标自动同步）
+  // 更新共享 uniform（地球和指标自动同步）。
+  // 正射(id=3)/立体(id=4)配置自带 uProjectionID=3（复用方位 shader）+ uAzimuthalType；
+  // 立体 id=4 但 shader 层 uProjectionID 由配置覆盖为 3。
   sharedUniforms.uProjectionID.value = id;
   Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
     if (sharedUniforms[key]) sharedUniforms[key].value = val;
   });
 
-  // 同步地球透明性：仅方位投影(id=3)需要淡出→透明；其他投影保持不透明（无需透明队列）
-  if (globe) globe.material.transparent = (id === 3);
+  // 同步地球透明性：正射(id=3)/立体(id=4)需远端淡出→透明；其他投影保持不透明
+  if (globe) globe.material.transparent = (id === 3 || id === 4);
 
   updatePanel(currentProjection);
 }

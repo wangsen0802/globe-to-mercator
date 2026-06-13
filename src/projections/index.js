@@ -1,9 +1,10 @@
 import { mercator } from './mercator.js';
 import { plateCarree } from './plateCarree.js';
 import { conic } from './conic.js';
-import { azimuthal } from './azimuthal.js';
+import { orthographic } from './orthographic.js';
+import { stereographic } from './stereographic.js';
 
-const projections = [mercator, plateCarree, conic, azimuthal];
+const projections = [mercator, plateCarree, conic, orthographic, stereographic];
 
 // 断言：id 必须从 0 连续递增且唯一
 // globe.vert / indicator.vert / greatCircleRoutes.js 用 `if (id < 0.5)...` 数值区间分发，
@@ -16,7 +17,7 @@ projections.forEach((p, i) => {
 
 /**
  * 通过 id 获取投影配置
- * @param {number} id 投影 ID (0-3)
+ * @param {number} id 投影 ID (0-4)
  * @returns {object} 投影配置对象
  */
 export function getProjection(id) {
