@@ -14,6 +14,7 @@ varying float vDistortion;    // 面积变形因子（1.0=无变形）
 varying float vLocalProgress; // 局部展开进度
 varying vec3 vWorldPos;       // 世界坐标（用于背面判断）
 varying vec3 vSurfaceNormal;  // 球面法线（用于背面判断）
+varying float vFarMask;  // 方位投影远端半球淡出标记（与 globe.vert 同公式）
 
 #include common/projections.glsl
 
@@ -59,6 +60,18 @@ void main() {
   float localProgress = clamp((uProgress - localDelay) / (1.0 - uSpreadDelay + 0.001), 0.0, 1.0);
   localProgress = easeInOutCubic(localProgress);
   vLocalProgress = localProgress;
+
+  // 方位投影远端半球淡出标记（与 globe.vert 同公式）
+  float farMask = 0.0;
+  if (uProjectionID > 2.5) {
+    if (uAzimuthalType < 0.5) {
+      float cosC = cos(latitude) * cos(longitude);
+      farMask = smoothstep(0.0, 0.2, -cosC);
+    } else {
+      farMask = smoothstep(0.0, 0.2, -sin(latitude));
+    }
+  }
+  vFarMask = farMask;
 
   // 球面 ↔ 平面插值
   vec3 finalPos = mix(spherePos, flatPos, localProgress);

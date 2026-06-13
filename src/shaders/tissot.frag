@@ -3,6 +3,7 @@
 
 varying float vDistortion;
 varying float vLocalProgress;
+varying float vFarMask;
 varying vec3 vWorldPos;
 varying vec3 vSurfaceNormal;
 
@@ -24,7 +25,7 @@ void main() {
     color = mix(yellow, red, t);
   }
 
-  // 半透明填充，展开时稍微增强不透明度
-  float alpha = 0.55 + vLocalProgress * 0.15;
+  // 半透明填充，展开时稍微增强不透明度；方位投影远端半球随进度淡出
+  float alpha = (0.55 + vLocalProgress * 0.15) * (1.0 - vFarMask * vLocalProgress);
   gl_FragColor = vec4(color, alpha);
 }
