@@ -139,4 +139,30 @@ if (glslStereoMaxR && jsStereoMaxR && glslStereoMaxR !== jsStereoMaxR) {
   errorCount++;
 }
 
+// 方位投影远端淡出 mask 的 smoothstep 过渡带宽度一致性护栏
+// mask 公式散落在 globe.vert / indicator.vert / glow.vert / greatCircleRoutes.js(jsAzimuthalFarMask)
+// 断言各处 smoothstep(0.0, X, ...) / smoothstepJS(0.0, X, ...) 的过渡带宽度 X 一致，漂移即 fail
+const maskBandRe = /smoothstep(?:JS)?\(\s*0\.0\s*,\s*([\d.]+)\s*,/g;
+function extractMaskBands(src) {
+  const bands = new Set();
+  let m;
+  while ((m = maskBandRe.exec(src)) !== null) bands.add(m[1]);
+  return bands;
+}
+const maskBandFiles = {
+  'globe.vert': readFileSync(resolve(shadersDir, 'globe.vert'), 'utf-8'),
+  'indicator.vert': readFileSync(resolve(shadersDir, 'indicator.vert'), 'utf-8'),
+  'glow.vert': readFileSync(resolve(shadersDir, 'glow.vert'), 'utf-8'),
+  'greatCircleRoutes.js': jsRoutesSrc,
+};
+const allMaskBands = new Set();
+for (const src of Object.values(maskBandFiles)) {
+  for (const b of extractMaskBands(src)) allMaskBands.add(b);
+}
+if (allMaskBands.size > 1) {
+  console.log(`\x1b[31m✗ 投影漂移\x1b[0m: 远端淡出 mask 过渡带不一致 [${[...allMaskBands].join(', ')}]`);
+  console.log(`  请对齐 globe.vert / indicator.vert / glow.vert / greatCircleRoutes.js 的 smoothstep(0.0, X, ...) 宽度`);
+  errorCount++;
+}
+
 process.exit(errorCount > 0 ? 1 : 0);
