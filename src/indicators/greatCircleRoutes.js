@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import indicatorVert from '../shaders/indicator.vert?raw';
 import routeFrag from '../shaders/route.frag?raw';
+import glowVert from '../shaders/glow.vert?raw';
+import glowFrag from '../shaders/glow.frag?raw';
 import { PI, DEG2RAD } from '../utils/math.js';
 
 const ROUTES = [
@@ -331,28 +333,40 @@ function createGlowTexture() {
 
 const glowTexture = createGlowTexture();
 
-// 沿大圆航线创建发光粒子
-function createGlowPoints(points) {
-  const positions = new Float32Array(points.length * 3);
-  for (let i = 0; i < points.length; i++) {
+// 沿大圆航线创建发光粒子（GPU 投影 + 方位投影远端淡出，uViewportHeight 由外部 onResize 更新）
+function createGlowPoints(points, uniforms) {
+  const count = points.length;
+  const positions = new Float32Array(count * 3);
+  const lats = new Float32Array(count);
+  const lons = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
     const [x, y, z] = latLonToXYZ(points[i].lat, points[i].lon);
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
     positions[i * 3 + 2] = z;
+    lats[i] = points[i].lat;
+    lons[i] = points[i].lon;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('aLatitude', new THREE.BufferAttribute(lats, 1));
+  geometry.setAttribute('aLongitude', new THREE.BufferAttribute(lons, 1));
 
-  const material = new THREE.PointsMaterial({
-    map: glowTexture,
-    size: 0.06,
+  const material = new THREE.ShaderMaterial({
+    vertexShader: glowVert,
+    fragmentShader: glowFrag,
+    uniforms: {
+      ...uniforms,
+      uGlowTexture: { value: glowTexture },
+      uColor: { value: new THREE.Color(GC_COLOR) },
+      uPointSize: { value: 0.06 },
+      uViewportHeight: { value: window.innerHeight },
+      uBaseOpacity: { value: 0.7 }
+    },
     transparent: true,
-    opacity: 0.7,
-    blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: true,
-    color: GC_COLOR,
-    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending
   });
 
   return new THREE.Points(geometry, material);
@@ -363,7 +377,7 @@ function createGlowPoints(points) {
 export function createGreatCircleRoutes(uniforms) {
   const group = new THREE.Group();
   const sprites = [];
-  const glowData = []; // { points, latLons }
+  const glowMaterials = []; // 记录所有 glow 材质，供 onResize 更新 uViewportHeight
 
   for (const route of ROUTES) {
     for (const mesh of createRouteLines(route, uniforms)) {
@@ -379,13 +393,13 @@ export function createGreatCircleRoutes(uniforms) {
       sprites.push({ sprite, lat, lon });
     }
 
-    // 大圆航线发光粒子（仅大圆航线，恒向线不加）
+    // 大圆航线发光粒子（仅大圆航线，恒向线不加）；GPU 投影，无需逐帧 JS 更新位置
     const gcPoints = generateGreatCirclePoints(route.from, route.to);
     for (const seg of splitAtDateLine(gcPoints)) {
       if (seg.length < 2) continue;
-      const glow = createGlowPoints(seg);
+      const glow = createGlowPoints(seg, uniforms);
       group.add(glow);
-      glowData.push({ points: glow, latLons: seg });
+      glowMaterials.push(glow.material);
     }
   }
 
@@ -426,17 +440,14 @@ export function createGreatCircleRoutes(uniforms) {
         sprite.visible = !(backFacing && progress < 0.3);
       }
     }
+  }
 
-    // 更新发光粒子位置（跟随投影变换）
-    for (const { points, latLons } of glowData) {
-      const posAttr = points.geometry.getAttribute('position');
-      for (let i = 0; i < latLons.length; i++) {
-        const p = computeLabelPosition(latLons[i].lat, latLons[i].lon, progress, uniforms);
-        posAttr.setXYZ(i, p[0], p[1], p[2]);
-      }
-      posAttr.needsUpdate = true;
+  // 窗口尺寸变化时更新 glow 的 uViewportHeight（gl_PointSize 衰减用）
+  function onResize(viewportHeight) {
+    for (const mat of glowMaterials) {
+      mat.uniforms.uViewportHeight.value = viewportHeight;
     }
   }
 
-  return { group, updateLabels };
+  return { group, updateLabels, onResize };
 }
