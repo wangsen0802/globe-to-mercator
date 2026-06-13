@@ -37,9 +37,11 @@ src/
     ├── globe.vert       # 地球顶点着色器：线性经度参数化 + 球面→投影变形 + 剥橘子缓动 + 切线空间基向量
     ├── globe.frag       # 地球片段着色器：4光源 + 法线贴图TBN + 经纬线/特殊纬度线 + Gamma校正 + 过渡发光
     ├── indicator.vert   # 指标顶点着色器（朝索+面积轮廓共用，含数值雅可比变形因子）
+    ├── glow.vert        # 发光粒子顶点着色器：GPU 投影（复用 projections.glsl）+ 方位远端淡出 + gl_PointSize 衰减
     ├── tissot.frag      # 朝索变形着色（绿→黄→红梯度）
     ├── route.frag       # 航线片段着色器：uniform 颜色 + 透明度
-    └── outline.frag     # 轮廓线/填充着色
+    ├── outline.frag     # 轮廓线/填充着色
+    └── glow.frag        # 发光粒子片元：径向渐变纹理 × 颜色 × 逐点 alpha
 public/assets/            # 静态资源：地球纹理、法线贴图、favicon（Vite 映射到根路径，代码以 ./assets/ 引用）
 vite.config.js            # Vite 配置：dev server（0.0.0.0:3000）+ glslInclude 插件
 vite-plugin-glsl-include.js  # Vite 插件：处理 GLSL #include 指令（导出 expandIncludes 供 lint 复用）
@@ -63,6 +65,7 @@ docs/                     # 学习文档：架构指南、main.js 深入解析�
 - **4 光源系统**: `uLightDir` ~ `uLightDir4`，从不同角度照亮球体，增强立体感
 - **经纬线开关**: 通过 `uShowGrid` uniform 控制经纬线显示/隐藏
 - **特殊纬度线**: `globe.frag` 在普通经纬线（每 30°）之外，按纬度 v 坐标额外绘制——赤道 0°(亮白)、南北回归线 ±23.44°(暖黄**虚线**，`step(0.4, fract(u*36))` 生成)、南北极圈 ±66.56°(冷蓝紫)。回归线为虚线、其余实线，受 `uShowGrid` 统一开关控制
+- **方位投影远端半球淡出**: 方位投影（正射/立体）是"穿透投影"，只能覆盖一个半球，压扁全球会重叠/爆炸。引入 `vFarMask ∈ [0,1]` 远端标记，驱动 `alpha = 1 - vFarMask · localProgress`：随剥开进度把远端半球淡出，展平后只剩单一有效半球圆盘。标记公式在 `globe.vert`/`indicator.vert`/`glow.vert` 三处 GLSL + `greatCircleRoutes.js`(`jsAzimuthalFarMask`) JS 共 4 份，正射用 `smoothstep(0,0.2,-cos(lat)cos(lon))`（背面）、立体用 `smoothstep(0,0.2,-sin(lat))`（南半球），非方位投影恒 0（其他三种投影完全不淡出）。立体投影额外做半径钳制（`stereoMaxR=2.3`）防南半球 `k` 发散爆炸。地球材质因此开 `transparent:true`；所有指标（朝索/面积/航线/精灵/发光粒子）同步淡出
 
 ### 地球纹理系统（textures/index.js + main.js）
 
@@ -88,8 +91,8 @@ docs/                     # 学习文档：架构指南、main.js 深入解析�
 - **Canvas 精灵**: `createCitySprite(name)` 用 Canvas 绘制圆点标记+城市名称纹理，渲染为 `THREE.Sprite`
 - **JS 端投影**: `computeLabelPosition(lat, lon, progress, uniforms)` 在 JS 端模拟顶点着色器的球面→投影插值（含剥橘子缓动），计算城市标签实时位置
 - **背面隐藏**: `isFrontFacing(sprite, cameraPos)` 通过法线-视线点积判断精灵是否在球体背面，球面状态下自动隐藏
-- **发光粒子**: `createGlowPoints(points)` 沿大圆航线创建径向渐变发光粒子
-- **JS 投影函数**: `jsProjectMercator` / `jsProjectPlateCarree` / `jsProjectConic` / `jsProjectAzimuthal` — JS 端复刻 GLSL 投影逻辑（详见下方"半单源维护"）。⚠️ **发光粒子走 `PointsMaterial`（CPU/JS 投影），航线走 `indicator.vert`（GPU 投影）**——两套路径，JS 副本漂移会致粒子与航线错位
+- **发光粒子**: `createGlowPoints(points, uniforms)` 沿大圆航线创建径向渐变发光粒子，**GPU 投影**（`glow.vert`，复用 `projections.glsl` 与 `indicator.vert` 同源），含方位远端淡出 + `gl_PointSize` 距离衰减；`uViewportHeight` 由 `createGreatCircleRoutes` 返回的 `onResize` 在窗口缩放时更新
+- **JS 投影函数**: `jsProjectMercator` / `jsProjectPlateCarree` / `jsProjectConic` / `jsProjectAzimuthal` + `jsAzimuthalFarMask`（方位远端淡出标记）— JS 端复刻 GLSL 投影/mask 逻辑，**仅供城市精灵用**（`SpriteMaterial` 不能 `#include` GLSL）。发光粒子已改走 GPU 投影、与航线同源不再漂移；现仅精灵这一处依赖 JS 副本
 
 ### 指标球面坐标约定
 
@@ -121,8 +124,8 @@ lat = asin(y)
 ## ⚠️ 重要：投影函数的"半单源"维护
 
 - **GLSL 层真单源**：投影函数集中在 `src/shaders/common/projections.glsl`，经 `vite-plugin-glsl-include.js` 的 `#include` 注入。改投影函数只需动 `projections.glsl` 一处，`globe.vert`/`indicator.vert` 自动同步。
-- **JS 层有手写副本须手动同步**：`greatCircleRoutes.js` 的 `jsProject*` + `jsApplyProjection` + `easeInOutCubic` 是 shader 的纯 JS 复刻（精灵/粒子位置用，JS 不能 `#include` GLSL）。改 `projections.glsl` 的 clamp 边界后**必须同步该文件**。
-- **构建期护栏**：`glsl-lint.mjs` 末尾断言两端 clamp 边界一致（圆锥上限 `1.56`、方位 `±1.4`；墨卡托两端数学等价无需对齐），漂移即 `pnpm lint:glsl` 失败。`expandIncludes`（插件导出、lint 复用）基于绝对路径 `seen` 集合检测 `#include` 跨文件循环引用。
+- **JS 层有手写副本须手动同步**：`greatCircleRoutes.js` 的 `jsProject*` + `jsApplyProjection` + `jsAzimuthalFarMask` + `easeInOutCubic`/`smoothstepJS` 是 shader 的纯 JS 复刻（**仅城市精灵**用，发光粒子已改 GPU 投影，JS 不能 `#include` GLSL）。改 `projections.glsl` 的 clamp 边界或 mask 公式后**必须同步该文件**。
+- **构建期护栏**：`glsl-lint.mjs` 末尾断言 GLSL↔JS 数值一致，漂移即 `pnpm lint:glsl` 失败：① 圆锥纬度上限 `1.56`；② 立体投影半径钳制 `stereoMaxR=2.3`；③ 方位远端淡出 mask 的 `smoothstep(0.0, 0.2, …)` 过渡带宽度（跨 `globe.vert`/`indicator.vert`/`glow.vert`/`greatCircleRoutes.js` 四副本）。墨卡托两端数学等价无需对齐。`expandIncludes`（插件导出、lint 复用）基于绝对路径 `seen` 集合检测 `#include` 跨文件循环引用。
 
 ## 开发命令
 
