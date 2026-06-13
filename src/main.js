@@ -107,10 +107,10 @@ function createGlobe(texture, normalMap) {
     fragmentShader,
     uniforms,
     side: THREE.DoubleSide,
-    // 仅方位投影淡出时需要透明；其他投影地球 alpha 恒为 1，保持不透明。
-    // 若常驻 transparent:true，地球会进透明队列，展平时与共面的指标(椭圆/轮廓/航线)
-    // 按场景添加顺序排序——地球最后加入→排在指标之后渲染→alpha=1 覆盖指标，
-    // 导致约一半椭圆消失（曾出现的回归）。切换投影时由 switchProjection 同步此标志。
+    // 仅方位投影淡出时需要透明；其他投影 alpha 恒 1、无需进透明队列。
+    // 方位投影下地球 transparent 会与共面指标争透明队列顺序——已由指标统一设
+    // renderOrder=1（见下方指标系统 renderAboveEarth）根治：指标恒后于地球渲染、叠在其上。
+    // 切换投影时由 switchProjection 同步此标志。
     transparent: currentProjection.id === 3
   });
 
@@ -194,15 +194,29 @@ function createStars() {
 }
 
 // ===== 指标系统 =====
+// 方位投影下地球必须透明（远端半球淡出），但透明物体会与共面指标争夺透明队列渲染顺序：
+// 地球 depthWrite 默认开启、且最后加入场景 → 透明队列里后于指标渲染 → alpha=1 的近端覆盖
+// depthWrite:false 的指标（tissot 椭圆/面积轮廓/航线/精灵/发光粒子"消失"）；斜视角下靠近
+// 相机一侧的指标比地球近→后渲染→可见，远侧被覆盖，形成视角相关的"半边显示"。
+// 统一给指标设 renderOrder=1（地球保持默认 0）——renderOrder 优先于距离排序，指标恒定后于
+// 地球渲染，其 depthTest 因顶点着色器的 z 偏移更近而通过、叠在地球之上，地球仍正常透明淡出。
+// 修 5df69c4 遗留：该门控只让非方位投影地球不透明，方位投影仍透明、覆盖回归未解。
+function renderAboveEarth(group) {
+  group.traverse(obj => { obj.renderOrder = 1; });
+}
+
 const tissotIndicators = createTissotIndicators(sharedUniforms);
 scene.add(tissotIndicators.group);
+renderAboveEarth(tissotIndicators.group);
 
 const areaComparison = createAreaComparison(sharedUniforms);
 scene.add(areaComparison.group);
+renderAboveEarth(areaComparison.group);
 areaComparison.group.visible = false; // 默认关闭面积比较
 
 const greatCircleRoutes = createGreatCircleRoutes(sharedUniforms);
 scene.add(greatCircleRoutes.group);
+renderAboveEarth(greatCircleRoutes.group);
 greatCircleRoutes.group.visible = false;
 
 // ===== 初始化场景 =====
@@ -355,8 +369,7 @@ function switchProjection(id) {
     if (sharedUniforms[key]) sharedUniforms[key].value = val;
   });
 
-  // 同步地球透明性：仅方位投影(id=3)需要淡出→透明；切到其他投影恢复不透明
-  // （见 createGlobe 注释：常驻透明会导致展平时指标被地球覆盖的回归）
+  // 同步地球透明性：仅方位投影(id=3)需要淡出→透明；其他投影保持不透明（无需透明队列）
   if (globe) globe.material.transparent = (id === 3);
 
   updatePanel(currentProjection);
