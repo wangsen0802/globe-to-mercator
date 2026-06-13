@@ -107,7 +107,11 @@ function createGlobe(texture, normalMap) {
     fragmentShader,
     uniforms,
     side: THREE.DoubleSide,
-    transparent: true
+    // 仅方位投影淡出时需要透明；其他投影地球 alpha 恒为 1，保持不透明。
+    // 若常驻 transparent:true，地球会进透明队列，展平时与共面的指标(椭圆/轮廓/航线)
+    // 按场景添加顺序排序——地球最后加入→排在指标之后渲染→alpha=1 覆盖指标，
+    // 导致约一半椭圆消失（曾出现的回归）。切换投影时由 switchProjection 同步此标志。
+    transparent: currentProjection.id === 3
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -350,6 +354,10 @@ function switchProjection(id) {
   Object.entries(currentProjection.uniforms).forEach(([key, val]) => {
     if (sharedUniforms[key]) sharedUniforms[key].value = val;
   });
+
+  // 同步地球透明性：仅方位投影(id=3)需要淡出→透明；切到其他投影恢复不透明
+  // （见 createGlobe 注释：常驻透明会导致展平时指标被地球覆盖的回归）
+  if (globe) globe.material.transparent = (id === 3);
 
   updatePanel(currentProjection);
 }
